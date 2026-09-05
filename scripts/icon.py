@@ -1,0 +1,15 @@
+from PIL import Image, ImageDraw
+from pathlib import Path
+Path('assets').mkdir(exist_ok=True)
+im=Image.new('RGBA',(256,256),(0,0,0,0))
+d=ImageDraw.Draw(im)
+d.rounded_rectangle((8,8,248,248),radius=60,fill='#315f3e')
+d.line([(79,105),(109,62)],fill='#f5f8ed',width=12)
+d.line([(177,105),(147,62)],fill='#f5f8ed',width=12)
+d.rounded_rectangle((57,99,199,122),radius=11,fill='#f5f8ed')
+d.polygon([(69,123),(187,123),(174,190),(82,190)],fill='#f5f8ed')
+d.rounded_rectangle((100,133,110,171),radius=5,fill='#315f3e')
+d.rounded_rectangle((123,133,133,171),radius=5,fill='#315f3e')
+d.rounded_rectangle((146,133,156,171),radius=5,fill='#315f3e')
+im.save('assets/icon.ico',sizes=[(16,16),(24,24),(32,32),(48,48),(64,64),(128,128),(256,256)])
+im.save('assets/icon.png')

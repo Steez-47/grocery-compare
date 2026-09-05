@@ -1,0 +1,35 @@
+// Opt-in integration test for our own renderer, in an isolated hidden window.
+// It never opens a retailer page, signs in, transfers a basket or purchases.
+const assert=require('node:assert/strict');const fs=require('node:fs/promises');const path=require('node:path');
+async function run({win,cat,app}){
+ const report={version:app.getVersion(),packaged:app.isPackaged,checks:[],started:new Date().toISOString()};
+ const js=code=>win.webContents.executeJavaScript(code);
+ const until=async(condition)=>{const start=Date.now();while(!await js(condition)){if(Date.now()-start>45000)throw new Error('Renderer timeout: '+condition+'\n'+await js('document.body.innerText.slice(0,2000)'));await new Promise(r=>setTimeout(r,100));}};
+ await until('Boolean(document.querySelector(".stores-modal")) || Boolean(document.querySelector(".welcome"))');
+ const nw=(await cat.stores('newworld','Broadway')).find(x=>/Palmerston/i.test(x.address));
+ const ww=(await cat.stores('woolworths','Kelvin Grove'))[0];assert(nw&&ww);
+ const state={version:1,stores:{newworld:nw,woolworths:ww},loyalty:{newworld:true,woolworths:true},basket:[],policy:'cheapest'};
+ await js(`window.grocery.save(${JSON.stringify(state)})`);await win.loadURL(win.webContents.getURL());
+ await until('!document.querySelector(".stores-modal") && document.querySelector(".store-picker")?.textContent.includes("Broadway")');
+ report.checks.push('Store selection persisted through renderer reload');
+ await js(`Array.from(document.querySelectorAll('.quick-searches button')).find(b=>b.textContent==='Butter').click()`);
+ await until('Boolean(document.querySelector(".product-card")) && !document.querySelector(".loading")');
+ const cards=await js(`Array.from(document.querySelectorAll('.product-card')).map(c=>({name:c.querySelector('h3').textContent,offers:c.querySelectorAll('.add-button').length}))`);
+ assert(cards.length>5);assert.equal(cards[0].offers,2);assert(cards.filter(c=>c.offers===2).length>=5);
+ report.checks.push({name:'Live products rendered with paired offers first',cards:cards.length,paired:cards.filter(c=>c.offers===2).length});
+ await js(`document.querySelector('.product-card .add-button:not(:disabled)').click()`);
+ await until('Boolean(document.querySelector(".basket-line"))');
+ await js(`document.querySelector('.stepper button[aria-label^="More"]').click()`);
+ await until('document.querySelector(".stepper span")?.textContent === "2"');
+ await until('(async()=>{const s=await window.grocery.load();return s.basket.length===1&&s.basket[0].quantity===2})()');
+ const saved=await js('window.grocery.load()');assert.equal(saved.basket[0].quantity,2);assert.equal(Object.keys(saved.basket[0].offers).length,2);
+ await win.loadURL(win.webContents.getURL());await until('document.querySelector(".stepper span")?.textContent === "2"');
+ report.checks.push('Add, increase quantity, IPC save and basket reload');
+ await js(`document.querySelector('.checkout').click()`);await until('Boolean(document.querySelector(".checkout-modal"))');
+ report.checks.push('Checkout handoff dialog renders');
+ await js(`document.querySelector('[aria-label="Close checkout"]').click()`);
+ await js(`document.querySelector('.basket-line button[aria-label^="Remove"]').click()`);await until('Boolean(document.querySelector(".basket-empty"))');
+ report.checks.push('Remove returns to empty basket');
+ await fs.writeFile(path.join(app.getPath('userData'),'verification.json'),JSON.stringify(report,null,2));
+}
+module.exports={run};

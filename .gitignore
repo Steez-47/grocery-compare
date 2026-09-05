@@ -1,0 +1,11 @@
+node_modules/
+dist/
+release/
+research/*
+!research/README.md
+test-results/
+.env*
+*.log
+*.tmp
+*.local
+.DS_Store
