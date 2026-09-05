@@ -1,6 +1,6 @@
 node_modules/
 dist/
-release/
+release*/
 research/*
 !research/README.md
 test-results/

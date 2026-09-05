@@ -16,6 +16,7 @@ function nwProduct(p,store){
  const cup=p.singlePrice?.comparativePrice;
  return {retailer:'newworld',id:p.productId,name,brand:p.brand||'',size:p.displayName||'',barcode:p.barcode||p.gtin||'',
   image:p.productImageUrls?.[0]||p.productImageUrl||`https://a.fsimg.co.nz/product/retail/fan/image/400x400/${p.productId.split('-')[0]}.png`,
+  categories:Object.values(p.categoryTrees?.[0]||{}).filter(Boolean),tags:(p.facets||[]).map(f=>f.itemDescription).filter(Boolean),special:Boolean(promo||p.decalCode),healthStar:null,
   cents:Math.round(price),regularCents:member?null:Math.round(price),member,offer:promo?.description||'',
   unit:weighted?'kg':'each',min:weighted?0.1:1,step:weighted?0.1:1,max:99,
   unitPrice:cup&&Number.isFinite(cup.pricePerUnit)?`$${(cup.pricePerUnit/100).toFixed(2)} / ${cup.measureDescription||cup.unitQuantityUom}`:'',
@@ -30,6 +31,7 @@ function wwProducts(data,store){
   if(money(price?.sellingPrice)===null)return null;
   return {retailer:'woolworths',id:v.variantKey,sku:p.sku,name:v.name||p.productName,brand:p.brand||'',size:sizeOf(v.name||p.productName),barcode:'',
    image:p.imageUrl||'',cents:money(price.sellingPrice),regularCents:money(price.wasPrice)??(price.isClubPrice?null:money(price.sellingPrice)),member:!!price.isClubPrice,
+   categories:Object.values(p.categoryHierarchyNames||{}).flat().filter(x=>x&&x!=='All Departments'),tags:[],special:!!price.isSpecial,healthStar:p.healthStarRating??null,
    offer:'',unit:unit?.unit==='KILOGRAM' || v.unitOfMeasure==='KG' || /-KG$/.test(v.variantKey)?'kg':'each',
    min:unit?.minimumQty||1,step:unit?.incrementQty||1,max:unit?.maximumQty||99,
    unitPrice:price.cupPrice!=null?`$${Number(price.cupPrice).toFixed(2)} / ${price.cupUnit||''}`:'',
@@ -37,7 +39,7 @@ function wwProducts(data,store){
    storeId:store.id,fulfilmentStoreId:p.storeKey,checkedAt:new Date().toISOString(),url:`${WW}/shop/productdetails?stockcode=${p.sku}`};
  })).filter(Boolean);
 }
-const productFields = `sku productName brand imageUrl storeKey isAlcohol isTobacco variants { variantKey name unitOfMeasure availabilityStatus purchaseUnit { unit minimumQty maximumQty incrementQty defaultQty } variantPrice { sellingPrice wasPrice isClubPrice isSpecial cupPrice cupUnit } }`;
+const productFields = `sku productName brand imageUrl storeKey isAlcohol isTobacco categoryHierarchyNames { lvl0 lvl1 lvl2 lvl3 } healthStarRating variants { variantKey name unitOfMeasure availabilityStatus purchaseUnit { unit minimumQty maximumQty incrementQty defaultQty } variantPrice { sellingPrice wasPrice isClubPrice isSpecial cupPrice cupUnit } }`;
 const WSEARCH=`query ProductSearch($input:CompositeSearchInput!){My{myKey products(searchInput:$input){totalCount totalPages results{...on ProductSummary{${productFields}} ...on SponsoredProduct{${productFields}}}}}}`;
 const WCART=`query CustomerCart{customerCart{key shoppingMode{mode pickupLocationId pickupLocation{id name}} lineItems{sku productVariantSku quantity} validationResult{failedValidations{message}}}}`;
 const WSTORE=`mutation SetCartShoppingMode($input:SetCartShoppingModeInput!){setCartShoppingMode(input:$input){shoppingMode{mode pickupLocationId pickupLocation{id name}} validationResult{failedValidations{message}}}}`;
@@ -75,14 +77,22 @@ class Catalogue {
   const d=await this.gql('query SearchLocations($input:LocationsInput!){locations(input:$input){locations{id name storeId address{locality{suburb city}}}}}',{input:{search:query.trim(),allStores:false,filter:{max:250}}});
   return (d.locations?.locations||[]).map(s=>({id:s.id,name:s.name.replace(/ Woolworths$/,''),address:[s.address?.locality?.suburb,s.address?.locality?.city].filter(Boolean).join(', ')}));
  }
- async search(retailer,store,query,page=0,force=false){
+ async departments(stores){
+  const {departments}=require('./browse.cjs');
+  if(this.departmentCache?.id===stores.newworld.id)return this.departmentCache.data;
+  const [nw,ww]=await Promise.all([this.nw('/store/'+stores.newworld.id+'/categories'),this.gql('query GetAllCategories{My{categories{key name children{key name children{key name children{key name}}}}}}')]);
+  const data=departments(nw,ww);this.departmentCache={id:stores.newworld.id,data};return data;
+ }
+ async search(retailer,store,query,page=0,force=false,options={}){
   if(!store?.id)throw new Error('Choose a store first.');
-  const key=[retailer,store.id,query,page].join('|');const old=this.cache.get(key);
+  const key=[retailer,store.id,query,page,JSON.stringify(options)].join('|');const old=this.cache.get(key);
   if(!force&&old&&Date.now()-old.time<180000)return old.data;
   let result;
   if(retailer==='newworld'){
    const region=store.region||'NI';
-   const d=await this.nw('/search/paginated/products',{method:'POST',body:JSON.stringify({algoliaQuery:{attributesToHighlight:[],attributesToRetrieve:['productID','Type'],facets:[],filters:`stores:${store.id}`,hitsPerPage:36,page,query},algoliaFacetQueries:[],storeId:store.id,hitsPerPage:36,page,sortOrder:`${region}_POPULARITY_ASC`,tobaccoQuery:false,precisionMedia:{adDomain:'SEARCH_PAGE',adPositions:[],publishImpressionEvent:false,disableAds:true}})});
+   const category=options.category?.path;
+   const filters=`stores:${store.id}`+(category?.length?` AND category${category.length-1}${region}:${JSON.stringify(category.at(-1))}`:'');
+   const d=await this.nw('/search/paginated/products',{method:'POST',body:JSON.stringify({algoliaQuery:{attributesToHighlight:[],attributesToRetrieve:['productID','Type'],facets:[],filters,hitsPerPage:36,page,query},algoliaFacetQueries:[],storeId:store.id,hitsPerPage:36,page,sortOrder:`${region}_POPULARITY_ASC`,tobaccoQuery:false,precisionMedia:{adDomain:'SEARCH_PAGE',adPositions:[],publishImpressionEvent:false,disableAds:true}})});
    if(!Array.isArray(d.products))throw new Error('New World returned an unexpected product response.');
    result={products:d.products.map(p=>nwProduct(p,store)).filter(Boolean),total:d.totalProducts||d.totalHits||d.products.length,pages:d.totalPages||d.numberOfPages||1};
   }else{
@@ -92,7 +102,7 @@ class Catalogue {
      if(d.setCartShoppingMode?.shoppingMode?.pickupLocationId!==store.id)throw new Error('Woolworths could not select that store.');
      this.wwStore=store.id;
     }
-    const d=await this.gql(WSEARCH,{input:{byKeyword:{value:query,sortBy:'RELEVANCE',pageSize:36,pageIndex:page}}});
+    const d=await this.gql(WSEARCH,{input:{[options.category?.key?'byCategoryKey':'byKeyword']:{value:options.category?.key||query,sortBy:'RELEVANCE',pageSize:36,pageIndex:page}}});
     return {products:wwProducts(d,store),total:d.My.products.totalCount,pages:d.My.products.totalPages};
    };
    const job=this.wwQueue.then(work,work);this.wwQueue=job.catch(()=>{});result=await job;

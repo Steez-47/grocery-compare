@@ -49,7 +49,8 @@ app.whenReady().then(async()=>{
   state={version:1,stores:next.stores,loyalty:next.loyalty,basket:next.basket,policy:next.policy};await persist();return true;
  });
  handle('stores',async(r,q)=>{if(!['newworld','woolworths'].includes(r)||typeof q!=='string'||q.length>100)throw new Error('Invalid store search.');return cat.stores(r,q);});
- handle('search',async(r,store,q,page=0,force=false)=>{if(!['newworld','woolworths'].includes(r)||typeof q!=='string'||q.length>100||!Number.isInteger(page)||page<0||page>28||!store?.id||!/^[a-zA-Z0-9-]+$/.test(store.id))throw new Error('Invalid search.');return cat.search(r,store,q,page,force);});
+ handle('departments',stores=>{if(!stores?.newworld?.id||!stores?.woolworths?.id||!/^[a-zA-Z0-9-]+$/.test(stores.newworld.id))throw new Error('Choose stores first.');return cat.departments(stores)});
+ handle('search',async(r,store,q,page=0,force=false,options={})=>{if(!['newworld','woolworths'].includes(r)||typeof q!=='string'||q.length>100||!Number.isInteger(page)||page<0||page>28||!store?.id||!/^[a-zA-Z0-9-]+$/.test(store.id)||JSON.stringify(options).length>1500)throw new Error('Invalid search.');if(options.category&&(!Array.isArray(options.category.path)||options.category.path.length>3||options.category.path.some(x=>typeof x!=='string'||x.length>150)))throw new Error('Invalid category.');return cat.search(r,store,q,page,force,options);});
  handle('store-open',async(r)=>showStore(r));
  handle('store-close',hideStore);
  handle('store-nav',action=>{if(!storeView)return;if(action==='back'&&storeView.webContents.navigationHistory.canGoBack())storeView.webContents.navigationHistory.goBack();if(action==='reload')storeView.webContents.reload();if(action==='cart')storeView.webContents.loadURL(activeRetailer==='woolworths'?WW+'/cart':NW+'/shop/cart').catch(()=>{});});

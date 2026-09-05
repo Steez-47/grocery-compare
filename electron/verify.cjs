@@ -2,6 +2,8 @@
 // It never opens a retailer page, signs in, transfers a basket or purchases.
 const assert=require('node:assert/strict');const fs=require('node:fs/promises');const path=require('node:path');
 async function run({win,cat,app}){
+ await fs.unlink(path.join(app.getPath('userData'),'verification.json')).catch(()=>{});
+ await fs.unlink(path.join(app.getPath('userData'),'verification-error.txt')).catch(()=>{});
  const report={version:app.getVersion(),packaged:app.isPackaged,checks:[],started:new Date().toISOString()};
  const js=code=>win.webContents.executeJavaScript(code);
  const until=async(condition)=>{const start=Date.now();while(!await js(condition)){if(Date.now()-start>45000)throw new Error('Renderer timeout: '+condition+'\n'+await js('document.body.innerText.slice(0,2000)'));await new Promise(r=>setTimeout(r,100));}};
@@ -12,11 +14,26 @@ async function run({win,cat,app}){
  await js(`window.grocery.save(${JSON.stringify(state)})`);await win.loadURL(win.webContents.getURL());
  await until('!document.querySelector(".stores-modal") && document.querySelector(".store-picker")?.textContent.includes("Broadway")');
  report.checks.push('Store selection persisted through renderer reload');
- await js(`Array.from(document.querySelectorAll('.quick-searches button')).find(b=>b.textContent==='Butter').click()`);
+ await until('document.querySelectorAll(".department-tabs button").length >= 5');
+ await js(`Array.from(document.querySelectorAll('.department-tabs button')).find(b=>b.textContent==='Dairy & eggs').click()`);
+ await until('document.querySelectorAll(".aisle-tabs button").length > 2');
+ await js(`Array.from(document.querySelectorAll('.aisle-tabs button')).find(b=>b.textContent==='Milk').click()`);
+ await until('Boolean(document.querySelector(".product-card")) && !document.querySelector(".loading")');
+ await js(`Array.from(document.querySelectorAll('.browse-filters button')).find(b=>b.textContent==='House brands').click()`);
+ await until('Array.from(document.querySelectorAll(".browse-filters button")).find(b=>b.textContent==="House brands")?.getAttribute("aria-pressed")==="true"');
+ const houseNames=await js(`Array.from(document.querySelectorAll('.product-card h3')).map(e=>e.textContent)`);assert(houseNames.length>0&&houseNames.every(n=>/Pams|Woolworths|Value|Macro/.test(n)),houseNames.join(', '));assert(await js('Boolean(document.querySelector(".equivalent-badge"))'));
+ report.checks.push('Live department browsing and house-brand milk equivalents');
+ await js(`Array.from(document.querySelectorAll('.browse-filters button')).find(b=>b.textContent==='House brands').click()`);
+ await js(`Array.from(document.querySelectorAll('.aisle-tabs button')).find(b=>b.textContent==='Butter').click()`);
  await until('Boolean(document.querySelector(".product-card")) && !document.querySelector(".loading")');
  const cards=await js(`Array.from(document.querySelectorAll('.product-card')).map(c=>({name:c.querySelector('h3').textContent,offers:c.querySelectorAll('.add-button').length}))`);
  assert(cards.length>5);assert.equal(cards[0].offers,2);assert(cards.filter(c=>c.offers===2).length>=5);
  report.checks.push({name:'Live products rendered with paired offers first',cards:cards.length,paired:cards.filter(c=>c.offers===2).length});
+ await js(`document.querySelector('.similar-button').click()`);await until('document.querySelectorAll(".similar-row").length > 0');
+ await js(`document.querySelector('.similar-offers button:not(:disabled)').click()`);await until('Boolean(document.querySelector(".added-message"))');
+ await js(`document.querySelector('[aria-label="Close similar items"]').click()`);await until('Boolean(document.querySelector(".basket-line"))');
+ await js(`document.querySelector('.basket-line button[aria-label^="Remove"]').click()`);await until('Boolean(document.querySelector(".basket-empty"))');
+ report.checks.push('Similar-item suggestions and add-to-basket');
  await js(`document.querySelector('.product-card .add-button:not(:disabled)').click()`);
  await until('Boolean(document.querySelector(".basket-line"))');
  await js(`document.querySelector('.stepper button[aria-label^="More"]').click()`);

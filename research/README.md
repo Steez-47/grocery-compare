@@ -36,7 +36,7 @@ Historical reference: [Woolworths NZ API notes](https://github.com/thecolab-ai/.
 
 ## Matching and checks
 
-Exact word equality missed obvious same-product pairs: `Supersoft` / `Super Soft`, `12pk` / `12 Pack`, `Zero Lacto Blue` / `Lactose Free Milk Blue`, and `Grass Fed New Zealand Butter` / `Butter`. The revised matcher uses category-specific normalization, equal brands and sizes, and mutual unambiguous matches. It preserves salted/unsalted, reduced salt, bread slice styles, milk types, egg grade/housing and coffee preparation distinctions. Different store brands require an explicit user-selected equivalent.
+Exact word equality missed obvious same-product pairs: `Supersoft` / `Super Soft`, `12pk` / `12 Pack`, `Zero Lacto Blue` / `Lactose Free Milk Blue`, and `Grass Fed New Zealand Butter` / `Butter`. The revised matcher uses category-specific normalization, equal sizes, and mutual unambiguous matches. It preserves salted/unsalted, reduced salt, bread slice styles, milk types, egg grade/housing and coffee preparation distinctions. Version 0.2.0 also allows house-brand equivalents with matching attributes, identified separately from same-brand matches. See [metadata and browsing findings](../METADATA.md).
 
 On the inspected first-page results, butter pairs increased from 3 to 13. The revised matcher paired 9 milk, 17 bread and 10 egg products. These counts are observations from this particular store/date/result page, not coverage guarantees.
 
