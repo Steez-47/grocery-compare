@@ -53,3 +53,7 @@ The browsing feed now ranks themed shelves and products using local activity, fa
 There is no scraping proxy subscription, shared database or external comparison service. PricePulse is not used. Private GitHub storage does not make an undocumented interface supported; retailer changes can still require adapter updates.
 
 Electron's [WebContentsView](https://www.electronjs.org/docs/latest/api/web-contents-view), [sessions](https://www.electronjs.org/docs/latest/api/session) and [security guidance](https://www.electronjs.org/docs/latest/tutorial/security) informed the isolation between the app, anonymous catalogues and retailer checkout pages.
+
+## Version 0.4.0 browser handoff
+
+The app now opens checkout in the Windows default browser. An included Edge/Chrome companion keeps retailer authentication in that browser and runs fixed cart operations through a paired loopback connection. A real, isolated Edge test confirmed pairing and command/result delivery. Live retailer navigation in the hidden guest profile hit HTTP/2/loading errors, so signed-in browser cart transfer remains unverified. New World anonymous JWT roles were inspected without retaining credentials; `ANONYMOUS` sessions are refused by the companion. See [browser checkout](../BROWSER-CHECKOUT.md).

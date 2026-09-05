@@ -5,13 +5,13 @@ async function run({win,cat,app}){
  await fs.unlink(path.join(app.getPath('userData'),'verification.json')).catch(()=>{});
  await fs.unlink(path.join(app.getPath('userData'),'verification-error.txt')).catch(()=>{});
  const report={version:app.getVersion(),packaged:app.isPackaged,checks:[],started:new Date().toISOString()};
- const js=code=>win.webContents.executeJavaScript(code);
+ const js=async code=>{try{return await win.webContents.executeJavaScript(code)}catch(e){throw new Error(e.message+'\nVerification step: '+code)}};
  const until=async(condition)=>{const start=Date.now();while(!await js(condition)){if(Date.now()-start>45000)throw new Error('Renderer timeout: '+condition+'\n'+await js('document.body.innerText.slice(0,2000)'));await new Promise(r=>setTimeout(r,100));}};
  await until('Boolean(document.querySelector(".stores-modal")) || Boolean(document.querySelector(".home-feed"))');
  const nw=(await cat.stores('newworld','Broadway')).find(x=>/Palmerston/i.test(x.address));
  const ww=(await cat.stores('woolworths','Kelvin Grove'))[0];assert(nw&&ww);
  const state={version:1,stores:{newworld:nw,woolworths:ww},loyalty:{newworld:true,woolworths:true},basket:[],policy:'cheapest'};
- await js(`window.grocery.save(${JSON.stringify(state)})`);await win.loadURL(win.webContents.getURL());
+ await js(`window.grocery.save(${JSON.stringify(state)})`);await js("window.grocery.setAppearance('light')");await win.loadURL(win.webContents.getURL());
  await until('!document.querySelector(".stores-modal") && document.querySelector(".store-picker")?.textContent.includes("Broadway")');
  report.checks.push('Store selection persisted through renderer reload');
  await until('document.querySelectorAll(".recommendation-shelf .product-card").length >= 4');
@@ -20,6 +20,11 @@ async function run({win,cat,app}){
  const layout=await js('({width:window.innerWidth,overflow:document.documentElement.scrollWidth>window.innerWidth,cards:Array.from(document.querySelectorAll(".recommendation-shelf:first-of-type .product-card")).map(c=>({width:c.getBoundingClientRect().width,x:c.getBoundingClientRect().x,y:c.getBoundingClientRect().y}))})');
  assert(!layout.overflow);assert(layout.cards.every(c=>c.width>=140));report.checks.push({name:'Live themed shelves, four quick-add cards and layout',shelves,layout});
  await new Promise(r=>setTimeout(r,400));await fs.writeFile(path.join(app.getPath('userData'),'browse.png'),(await win.webContents.capturePage()).toPNG());
+ await js('document.querySelector(".theme-toggle").click()');await until('document.documentElement.dataset.theme === "dark"');
+ await new Promise(r=>setTimeout(r,300));await fs.writeFile(path.join(app.getPath('userData'),'browse-dark.png'),(await win.webContents.capturePage()).toPNG());
+ const appearance=await js('window.grocery.appearance()');assert.equal(appearance.theme,'dark');
+ const colors=await js('({bg:getComputedStyle(document.body).backgroundColor,text:getComputedStyle(document.body).color,header:document.querySelector(".topbar").getBoundingClientRect().height})');assert.equal(colors.header,64);assert.notEqual(colors.bg,'rgb(255, 255, 255)');
+ report.checks.push({name:'Compact layout and persistent dark-mode setting',colors});
  const firstAisle=await js('document.querySelector(".recommendation-shelf").dataset.aisle');
  await js('document.querySelector(".recommendation-shelf .add-button:not(:disabled)").click()');await until('Boolean(document.querySelector(".basket-line"))');
  await until('(async()=> (await window.grocery.preferences()).revision > 0)()');
@@ -67,7 +72,11 @@ async function run({win,cat,app}){
  assert.equal((await js(`window.grocery.compare(${JSON.stringify(Object.values(original.offers))})`)).length,1);
  report.checks.push('Remembered match corrections change native comparison results');
  await js(`document.querySelector('.checkout').click()`);await until('Boolean(document.querySelector(".checkout-modal"))');
- report.checks.push('Checkout handoff dialog renders');
+ assert(await js('document.querySelector(".checkout-modal").textContent.includes("Open browser")'));
+ await js('document.querySelector(".browser-connect").click()');await until('Boolean(document.querySelector(".browser-setup"))');
+ assert(await js('document.querySelector(".browser-setup").textContent.includes("Load unpacked")'));
+ await js(`document.querySelector('[aria-label="Close browser setup"]').click()`);
+ report.checks.push('Browser checkout and companion setup render without opening a real browser');
  await js(`document.querySelector('[aria-label="Close checkout"]').click()`);
  await js(`document.querySelector('.basket-line button[aria-label^="Remove"]').click()`);await until('Boolean(document.querySelector(".basket-empty"))');
  report.checks.push('Remove returns to empty basket');
@@ -77,7 +86,7 @@ async function run({win,cat,app}){
  await js('document.querySelector(".recommendation-settings .text-button").click()');await until('document.querySelector(".recommendation-settings .text-button").textContent === "History cleared"');
  const profile=JSON.parse(await fs.readFile(path.join(app.getPath('userData'),'recommendations.json'),'utf8'));assert.equal(Object.keys(profile.products).length,0);assert.equal(profile.enabled,false);
  await js('document.querySelector(".recommendation-settings input").click()');await until('(async()=>(await window.grocery.preferences()).enabled)()');
- report.checks.push('Local learning persisted; settings opt-out and clear-history work');
+ assert.equal((await js('window.grocery.appearance()')).theme,'dark');report.checks.push('Local learning persisted; settings opt-out and clear-history work; dark mode survives history reset');
  await fs.writeFile(path.join(app.getPath('userData'),'verification.json'),JSON.stringify(report,null,2));
 }
 module.exports={run};

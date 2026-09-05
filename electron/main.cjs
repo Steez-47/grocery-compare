@@ -1,4 +1,5 @@
 const {app,BrowserWindow,WebContentsView,ipcMain,session,Menu,shell,dialog}=require('electron');
+const {BrowserLink,roots:browserRoots,transport:browserTransport}=require('./browser-link.cjs');
 const path=require('node:path');const fs=require('node:fs/promises');const {pathToFileURL}=require('node:url');
 const {Catalogue,WW,NW,UA}=require('./catalogue.cjs');const {basketSummary,validateQuantity}=require('./model.cjs');
 const {groupProducts}=require('./model.cjs');const {Preferences,rankRows,rankShelves}=require('./recommend.cjs');const {textScore}=require('./matching.cjs');const {recommendationQuery}=require('./browse.cjs');
@@ -7,7 +8,7 @@ const smoke=process.argv.includes('--smoke'),verify=process.argv.includes('--ver
 process.stdout?.on('error',()=>{});process.stderr?.on('error',()=>{});
 if(smoke||verify)app.setPath('userData',path.join(app.isPackaged?app.getPath('temp'):path.join(__dirname,'..'),'test-results',verify?'verification-profile':'profile'));
 if(!smoke&&!verify&&!app.requestSingleInstanceLock()){app.quit();return;}
-let win,cat,prefs,storeView=null,activeRetailer=null,nwToken=null,saveQueue=Promise.resolve(),transferring=false;
+let win,cat,prefs,browserLink,browserCat,storeView=null,activeRetailer=null,nwToken=null,saveQueue=Promise.resolve(),transferring=false;
 let shelfJobs=0;const shelfWaiters=[];
 async function shelfWork(fn){if(shelfJobs>=2)await new Promise(resolve=>shelfWaiters.push(resolve));shelfJobs++;try{return await fn()}finally{shelfJobs--;shelfWaiters.shift()?.()}}
 const validProducts=ps=>Array.isArray(ps)&&ps.length<=2200&&JSON.stringify(ps).length<=5000000&&ps.every(p=>p&&['newworld','woolworths'].includes(p.retailer)&&typeof p.id==='string'&&p.id.length<100&&typeof p.name==='string'&&p.name.length<500);
@@ -40,14 +41,21 @@ function handle(name,fn){ipcMain.handle(name,async(e,...args)=>{if(e.sender!==wi
 app.whenReady().then(async()=>{
  Menu.setApplicationMenu(null);
  prefs=new Preferences(path.join(app.getPath('userData'),'recommendations.json'));await prefs.load();
+ browserLink=new BrowserLink(path.join(app.getPath('userData'),'browser-link.json'),{port:verify||smoke?0:47391});await browserLink.start().catch(()=>{browserLink.error='Browser connection port is unavailable. Close other Grocery Compare instances and reopen the app.'});browserCat=new Catalogue(Object.fromEntries(['newworld','woolworths'].map(r=>[r,browserTransport(browserLink,r)])));
  try{const loaded=JSON.parse(await fs.readFile(path.join(app.getPath('userData'),'shopping.json'),'utf8'));if(loaded.version===1)state={...defaults,...loaded};}catch(err){if(err.code!=='ENOENT')await fs.copyFile(path.join(app.getPath('userData'),'shopping.json'),path.join(app.getPath('userData'),'shopping.recovery.json')).catch(()=>{});}
  for(const r of ['newworld','woolworths'])for(const s of [catalogSession(r),checkoutSession(r)]){s.setUserAgent(UA);s.setPermissionRequestHandler((_wc,_permission,cb)=>cb(false));s.setPermissionCheckHandler(()=>false);}
  checkoutSession('newworld').webRequest.onBeforeSendHeaders({urls:['https://api-prod.newworld.co.nz/*']},(details,cb)=>{const value=details.requestHeaders.Authorization||details.requestHeaders.authorization;if(value?.startsWith('Bearer '))nwToken=value.slice(7);cb({requestHeaders:details.requestHeaders});});
  cat=new Catalogue(Object.fromEntries(['newworld','woolworths'].map(r=>[r,(url,opts,checkout)=>(checkout?checkoutSession(r):catalogSession(r)).fetch(url,opts)])));
- win=new BrowserWindow({show:!verify,title:'Grocery Compare',width:1380,height:920,minWidth:1040,minHeight:700,backgroundColor:'#f6f7f2',icon:path.join(__dirname,'../assets/icon.ico'),webPreferences:{backgroundThrottling:!verify,preload:path.join(__dirname,'preload.cjs'),contextIsolation:true,nodeIntegration:false,sandbox:true}});
+ win=new BrowserWindow({show:!verify,title:'Grocery Compare',width:1380,height:920,minWidth:1040,minHeight:700,backgroundColor:'#f6f7f2',icon:path.join(__dirname,'../assets/icon.ico'),webPreferences:{offscreen:verify,backgroundThrottling:!verify,preload:path.join(__dirname,'preload.cjs'),contextIsolation:true,nodeIntegration:false,sandbox:true}});
  win.on('resize',layout);win.on('closed',()=>{for(const v of Object.values(views))if(!v.webContents.isDestroyed())v.webContents.close();win=null;});
  win.webContents.setWindowOpenHandler(()=>({action:'deny'}));win.webContents.on('will-navigate',e=>e.preventDefault());
  handle('load',()=>state);
+ handle('appearance',()=>({theme:['light','dark'].includes(prefs.data.theme)?prefs.data.theme:'system'}));
+ handle('appearance-set',async theme=>{if(!['system','light','dark'].includes(theme))throw new Error('Invalid appearance.');prefs.data.theme=theme;await prefs.save();return true});
+ handle('browser-status',()=>browserLink.status());
+ handle('browser-connect',async()=>{if(browserLink.error)throw new Error(browserLink.error);await shell.openExternal(browserLink.connectURL());return true});
+ handle('browser-disconnect',async()=>{await browserLink.disconnect();return true});
+ handle('browser-folder',async()=>{const folder=app.isPackaged?path.join(process.resourcesPath,'browser-extension'):path.join(__dirname,'../browser-extension');const error=await shell.openPath(folder);if(error)throw new Error(error);return true});
  handle('compare',products=>{if(!validProducts(products))throw new Error('Invalid products.');return groupProducts(products,prefs.data)});
  handle('track',async event=>{if(!event||!['add','view','browse','dismiss','impression'].includes(event.type)||JSON.stringify(event).length>35000||event.product&&!validProducts([event.product])||event.products&&!validProducts(event.products))throw new Error('Invalid activity.');await prefs.track(event);return true});
  handle('preferences',()=>({enabled:prefs.data.enabled,revision:prefs.data.revision}));
@@ -74,7 +82,7 @@ app.whenReady().then(async()=>{
  handle('stores',async(r,q)=>{if(!['newworld','woolworths'].includes(r)||typeof q!=='string'||q.length>100)throw new Error('Invalid store search.');return cat.stores(r,q);});
  handle('departments',stores=>{if(!stores?.newworld?.id||!stores?.woolworths?.id||!/^[a-zA-Z0-9-]+$/.test(stores.newworld.id))throw new Error('Choose stores first.');return cat.departments(stores)});
  handle('search',async(r,store,q,page=0,force=false,options={})=>{if(!['newworld','woolworths'].includes(r)||typeof q!=='string'||q.length>100||!Number.isInteger(page)||page<0||page>28||!store?.id||!/^[a-zA-Z0-9-]+$/.test(store.id)||JSON.stringify(options).length>1500)throw new Error('Invalid search.');if(options.category&&(!Array.isArray(options.category.path)||options.category.path.length>3||options.category.path.some(x=>typeof x!=='string'||x.length>150)))throw new Error('Invalid category.');return cat.search(r,store,q,page,force,options);});
- handle('store-open',async(r)=>showStore(r));
+ handle('store-open',async r=>{if(!browserRoots[r])throw new Error('Unknown store.');await shell.openExternal(browserRoots[r]+(r==='newworld'?'/shop/cart':'/cart'));return true});
  handle('store-close',hideStore);
  handle('store-nav',action=>{if(!storeView)return;if(action==='back'&&storeView.webContents.navigationHistory.canGoBack())storeView.webContents.navigationHistory.goBack();if(action==='reload')storeView.webContents.reload();if(action==='cart')storeView.webContents.loadURL(activeRetailer==='woolworths'?WW+'/cart':NW+'/shop/cart').catch(()=>{});});
  handle('transfer',async(r)=>{
@@ -82,7 +90,7 @@ app.whenReady().then(async()=>{
   const lines=basketSummary(state.basket,state.policy,state.loyalty).shops[r];if(!lines?.length)throw new Error('No items selected for this store.');
   for(const l of lines){if(l.product.storeId!==state.stores[r]?.id||!(Date.now()-Date.parse(l.product.checkedAt)<1800000))throw new Error('Refresh the basket for your selected stores first.');if(!validateQuantity(l.quantity,l.product))throw new Error('Check quantities before sending.');if(l.product.restricted)throw new Error('Add age-restricted items in the store itself.');}
   transferring=true;
-  try{const result=await cat.transfer(r,state.stores[r],lines,nwToken);if(views[r])views[r].webContents.reload();return result;}finally{transferring=false;}
+  try{await browserLink.request({type:'open',retailer:r});return await browserCat.transfer(r,state.stores[r],lines,'browser-session');}finally{transferring=false;}
  });
  handle('export',async()=>{const target=await dialog.showSaveDialog(win,{defaultPath:'Shopping list.txt',filters:[{name:'Text',extensions:['txt']}]});if(target.canceled)return false;const s=basketSummary(state.basket,state.policy,state.loyalty);const text=Object.entries(s.shops).map(([r,lines])=>`${r==='newworld'?'New World':'Woolworths'} ${state.stores[r]?.name||''}\n`+lines.map(l=>`${l.quantity}${l.product.unit==='kg'?' kg':''} × ${l.product.name}`).join('\n')).join('\n\n');await fs.writeFile(target.filePath,text);return true;});
  await win.loadURL(localURL);
@@ -91,4 +99,4 @@ app.whenReady().then(async()=>{
  if(smoke){require('./smoke.cjs').run({win,cat,state,showStore,hideStore,persist}).catch(async err=>{await fs.mkdir(path.join(__dirname,'../test-results'),{recursive:true});await fs.writeFile(path.join(__dirname,'../test-results/smoke-error.txt'),err.stack);app.exit(1);});}
 });
 app.on('window-all-closed',()=>app.quit());
-let quitting=false;app.on('before-quit',event=>{if(quitting)return;quitting=true;event.preventDefault();Promise.allSettled([saveQueue,prefs?.queue]).then(()=>app.exit(0));});
+let quitting=false;app.on('before-quit',event=>{if(quitting)return;quitting=true;event.preventDefault();Promise.allSettled([saveQueue,prefs?.queue,browserLink?.close()]).then(()=>app.exit(0));});

@@ -1,0 +1,2 @@
+chrome.storage.local.get('connection').then(({connection})=>{document.getElementById('status').textContent=connection?'Paired with the app. Open Grocery Compare to send your basket.':'Open Grocery Compare and choose Connect browser.'});
+document.getElementById('disconnect').onclick=async()=>{await chrome.storage.local.remove('connection');document.getElementById('status').textContent='Disconnected.';chrome.runtime.sendMessage({type:'disconnect'}).catch(()=>{})};

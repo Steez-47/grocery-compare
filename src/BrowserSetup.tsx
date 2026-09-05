@@ -1,0 +1,8 @@
+import React,{useEffect,useState} from 'react';
+import {Check,ExternalLink,FolderOpen,X} from 'lucide-react';
+export function BrowserSetup({onClose}:{onClose:()=>void}){
+ const [connected,setConnected]=useState(false),[error,setError]=useState('');
+ useEffect(()=>{let active=true;const check=()=>window.grocery.browserStatus().then(s=>{if(active){setConnected(s.connected);if(s.error)setError(s.error)}}).catch(()=>{});check();const timer=setInterval(check,2000);return()=>{active=false;clearInterval(timer)}},[]);
+ const action=(fn:()=>Promise<unknown>)=>{setError('');fn().catch(e=>setError(e.message))};
+ return <div className="modal-backdrop"><section className="modal browser-setup"><div className="modal-heading"><h2>Your browser</h2><button className="icon-button" aria-label="Close browser setup" onClick={onClose}><X size={19}/></button></div>{connected?<><div className="connection-ready"><Check size={20}/>Browser connected</div><button className="text-button" onClick={()=>action(()=>window.grocery.disconnectBrowser().then(()=>setConnected(false)))}>Disconnect</button></>:<><ol className="browser-steps"><li>In Edge or Chrome, open Extensions and enable Developer mode.</li><li>Choose Load unpacked and select the companion folder.</li><li>Connect below, then sign in at each store as usual.</li></ol><div className="browser-setup-actions"><button onClick={()=>action(()=>window.grocery.extensionFolder())}><FolderOpen size={16}/>Companion folder</button><button className="primary" onClick={()=>action(()=>window.grocery.connectBrowser())}>Connect browser<ExternalLink size={15}/></button></div></>}{error&&<p className="error-text">{error}</p>}</section></div>;
+}

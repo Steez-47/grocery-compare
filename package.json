@@ -1,6 +1,6 @@
 {
   "name": "grocery-compare",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "private": true,
   "description": "A simple Windows shopping app for New World and Woolworths NZ",
   "author": "Steez-47",
@@ -42,7 +42,13 @@
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "artifactName": "Grocery-Compare-Setup-${version}.${ext}"
-    }
+    },
+    "extraResources": [
+      {
+        "from": "browser-extension",
+        "to": "browser-extension"
+      }
+    ]
   },
   "dependencies": {
     "lucide-react": "^1.41.0",

@@ -4,15 +4,15 @@ A small Windows app for New World and Woolworths New Zealand. Choose a store for
 
 ## Use
 
-Install `Grocery-Compare-Setup-0.3.0.exe` from this private repository's Releases page. Windows may ask you to confirm running the unsigned installer.
+Install `Grocery-Compare-Setup-0.4.0.exe` from this private repository's Releases page. Windows may ask you to confirm running the unsigned installer.
 
 1. Choose your New World and Woolworths pickup locations.
 2. Browse themed shelves with four suggestions, quick-add and See more, or search and choose a department and aisle. Products matched across the stores appear first, with both prices on one card. Filter loaded products by brand, house brands, specials or availability.
 3. Add items and choose New World, Woolworths, or a split shop. A specific store selected for a line takes priority within the split shop; choose **Cheapest** on that line to compare automatically.
 4. Pams/Value and Woolworths/Essentials products automatically pair when their type, size and distinguishing attributes agree. These are labelled **House-brand equivalent**, with both product names visible. Use **Find match** for other equivalents, or **Similar items** to browse alternatives in other sizes and brands.
-5. Continue to stores, sign in on each retailer's page, return to the basket and send items. Complete checkout with the retailer.
+5. Use the moon/sun button for dark or light mode. Continue to checkout to open each store in your usual browser. Install the included Edge/Chrome companion once to send items through that browser session. See [browser setup](BROWSER-CHECKOUT.md). Complete payment with the retailer.
 
-Store logins, the shopping list and recommendation history stay on your computer. Browsing learns from your searches, aisle visits, similar-item views, adds and hidden shelves. Turn off **Personalise browsing** or use **Clear history** in Stores. Explicit match corrections survive a history reset. There is no app account, analytics service, paid API or shared server.
+Retailer logins stay in your main browser. The shopping list and recommendation history stay on your computer. Browsing learns from your searches, aisle visits, similar-item views, adds and hidden shelves. Turn off **Personalise browsing** or use **Clear history** in Stores. Explicit match corrections survive a history reset. There is no app account, analytics service, paid API or shared server.
 
 ## Current limits
 
@@ -47,7 +47,7 @@ The installer is written to `release/`. Electron's runtime and NSIS tools need n
 
 ## Design and research
 
-React and Electron provide one small interface plus isolated retailer browser sessions. The renderer has no Node access. Store pages have no preload bridge; checkout and catalogue sessions are separate. Password entry belongs to the retailer's page. New World authorization headers from that checkout session are held in memory, never written into app logs or source.
+React and Electron provide the app interface; the renderer has no Node access. Anonymous catalogue sessions remain separate from checkout in the default browser. A narrowly scoped Edge/Chrome companion runs cart requests inside the retailer tab. Cookies and New World authorization remain in the browser. Password entry and payment belong to the retailer. Existing embedded-browser data is preserved during upgrade but is not imported into the main browser.
 
 See [the integration research](research/README.md) for endpoints, evidence and verification boundaries. Retailer names and product images belong to their owners; this app is unaffiliated.
 

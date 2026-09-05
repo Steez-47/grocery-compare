@@ -1,6 +1,6 @@
 .product-card{position:relative}
-.separate-button{position:absolute;right:8px;top:8px;padding:5px;border:0;background:#ffffffd9;color:#81917b;border-radius:50%}
-.back-to-browse{border:0;background:transparent;padding:8px 0;color:#315f3e;font-weight:600}
+.separate-button{position:absolute;right:8px;top:8px;padding:5px;border:0;background:var(--surface);color:var(--muted);border-radius:50%}
+.back-to-browse{border:0;background:transparent;padding:8px 0;color:var(--accent);font-weight:600}
 .home-feed[hidden]{display:none}
 .feed-heading{display:flex;align-items:center;justify-content:space-between;margin:12px 0 4px}
 .feed-heading h2{font-size:18px;font-weight:600;letter-spacing:-.4px}
@@ -9,7 +9,7 @@
 .recommendation-shelf>header>div{display:flex;align-items:center;gap:4px}
 .shelf-title{padding:0;border:0;background:transparent}
 .shelf-title h2{font-size:18px;font-weight:600;letter-spacing:-.35px}
-.see-more{padding:5px 8px;background:transparent;border:0;color:#55754c;font-size:12px}
+.see-more{padding:5px 8px;background:transparent;border:0;color:var(--accent-text);font-size:12px}
 .shelf-products{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
 .shelf-products .product-card>.picture{height:110px;padding:14px 20px 3px}
 .shelf-products .product-name{padding:13px 12px 8px;min-height:83px}
@@ -22,12 +22,12 @@
 .shelf-products .add-button{width:25px;height:25px;flex-shrink:0}
 .shelf-products .similar-button{font-size:11px;padding:10px 12px;margin-top:9px}
 .shelf-skeleton{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;min-height:300px}
-.shelf-skeleton>div{background:linear-gradient(110deg,#eaf0e4 15%,#f5f7f0 35%,#eaf0e4 55%);border-radius:14px;background-size:220% 100%;animation:shelf-shimmer 2s ease-in-out infinite}
+.shelf-skeleton>div{background:linear-gradient(110deg,var(--skeleton) 15%,var(--skeleton-shine) 35%,var(--skeleton) 55%);border-radius:14px;background-size:220% 100%;animation:shelf-shimmer 2s ease-in-out infinite}
 @keyframes shelf-shimmer{to{background-position:-220% 0}}
-.shelf-error{min-height:160px;display:flex;align-items:center;justify-content:center;gap:15px;color:#7f795f;font-size:13px}
-.partial-shelf{display:block;font-size:11px;color:#8b8268;margin-top:9px}
-.recommendation-settings{display:flex;justify-content:space-between;align-items:center;border-top:1px solid #e5e9df;margin-top:18px;padding-top:15px;font-size:12px}
+.shelf-error{min-height:160px;display:flex;align-items:center;justify-content:center;gap:15px;color:var(--warning);font-size:13px}
+.partial-shelf{display:block;font-size:11px;color:var(--warning);margin-top:9px}
+.recommendation-settings{display:flex;justify-content:space-between;align-items:center;border-top:1px solid var(--border);margin-top:18px;padding-top:15px;font-size:12px}
 .recommendation-settings label{display:flex;gap:8px;align-items:center}
-.recommendation-settings input{accent-color:#315f3e}
+.recommendation-settings input{accent-color:var(--accent)}
 @media(max-width:1250px){.shelf-products{grid-template-columns:repeat(2,minmax(0,1fr))}.shelf-skeleton{grid-template-columns:repeat(2,minmax(0,1fr))}.shelf-skeleton>div{min-height:240px}}
 @media(prefers-reduced-motion:reduce){.shelf-skeleton>div{animation:none}}

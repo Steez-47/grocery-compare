@@ -3,7 +3,7 @@ const {clean}=require('./products.cjs');
 const {key,pairKey,textScore,tokenise}=require('./matching.cjs');
 const {effectivePrice}=require('./model.cjs');
 const DAY=86400000;
-const emptyProfile=()=>({version:1,enabled:true,revision:0,products:{},brands:{},interests:{},aisles:{},seen:{},confirmed:[],rejected:[]});
+const emptyProfile=()=>({version:1,enabled:true,theme:'system',revision:0,products:{},brands:{},interests:{},aisles:{},seen:{},confirmed:[],rejected:[]});
 const value=(entry,now)=>Number.isFinite(entry?.value)&&Number.isFinite(entry?.updated)?entry.value*Math.pow(0.5,Math.max(0,now-entry.updated)/(30*DAY)):0;
 function bump(map,k,weight,now){if(!k)return;map[k]={value:Math.max(-15,Math.min(30,value(map[k],now)+weight)),updated:now};}
 function trim(map,max){const entries=Object.entries(map);if(entries.length>max){entries.sort((a,b)=>(b[1].updated||b[1].last)-(a[1].updated||a[1].last));for(const [k]of entries.slice(max))delete map[k];}}
@@ -65,6 +65,6 @@ class Preferences{
  save(){const payload=JSON.stringify(this.data);this.queue=this.queue.catch(()=>{}).then(()=>fs.writeFile(this.file+'.tmp',payload).then(()=>fs.rename(this.file+'.tmp',this.file)));return this.queue;}
  async track(event){const id=JSON.stringify([event.type,event.product&&key(event.product),event.aisle,event.query]),now=Date.now();if(event.type!=='impression'&&now-(this.recent.get(id)||0)<15000)return;this.recent.set(id,now);if(this.recent.size>300)this.recent.delete(this.recent.keys().next().value);record(this.data,event,now);await this.save();}
  async feedback(a,b,accept){const k=pairKey(a,b);this.data.confirmed=this.data.confirmed.filter(x=>x!==k);this.data.rejected=this.data.rejected.filter(x=>x!==k);this.data[accept?'confirmed':'rejected'].push(k);this.data.confirmed=this.data.confirmed.slice(-500);this.data.rejected=this.data.rejected.slice(-500);this.data.revision++;await this.save();}
- async reset(){const old=this.data;this.data={...emptyProfile(),enabled:old.enabled,confirmed:old.confirmed,rejected:old.rejected,revision:old.revision+1};this.recent.clear();await this.save();}
+ async reset(){const old=this.data;this.data={...emptyProfile(),enabled:old.enabled,theme:old.theme,confirmed:old.confirmed,rejected:old.rejected,revision:old.revision+1};this.recent.clear();await this.save();}
 }
 module.exports={emptyProfile,record,affinity,rankRows,rankShelves,Preferences,unitValue};
