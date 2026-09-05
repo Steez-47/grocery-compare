@@ -30,7 +30,7 @@ Operations and fields were inspected in JavaScript published by [Woolworths NZ](
 - Kelvin Grove pickup location `9424` resulted in fulfilment-store key `9470`. The app preserves both identifiers and uses the retailer's own selection operation.
 - `CustomerCart` reads shopping mode and line items. `SetCartLineItemQuantity` uses target quantities, rather than additive quantities.
 - The gateway explicitly rejected `SetCartLineItemQuantity` for `GuestCart`. The app requires the user to sign in through its isolated checkout browser. Authenticated transfers remain unverified.
-- Some coffee listings omit pack size from both the search name and product details (`volumeSize: null`). Those are deliberately not automatically matched from a guessed size.
+- Some coffee listings omit pack size from both the search name and product details (`volumeSize: null`). Version 0.3.0 can match some of these when price divided by comparison-unit price gives a narrowly bounded size estimate and the other store explicitly supplies that size. Two inferred sizes and member-price listings are excluded; an estimate is not manufacturer-confirmed metadata.
 
 Historical reference: [Woolworths NZ API notes](https://github.com/thecolab-ai/.skills/blob/main/skills/woolworths-nz/references/api-notes.md). These are useful background, not the authority for the current GraphQL implementation.
 
@@ -41,6 +41,12 @@ Exact word equality missed obvious same-product pairs: `Supersoft` / `Super Soft
 On the inspected first-page results, butter pairs increased from 3 to 13. The revised matcher paired 9 milk, 17 bread and 10 egg products. These counts are observations from this particular store/date/result page, not coverage guarantees.
 
 Unit tests exercise positive matches and similar-looking products that must remain separate, missing prices, membership, purchase increments, cart target quantities, verification failures and occupied-cart location protection. Hidden native integration tests exercise the real Electron renderer and IPC with live products, a disposable basket and persistence. Signed-in checkout still needs testing by an account holder.
+
+## Version 0.3.0 matching and recommendations
+
+A second matching stage uses normalized sparse word and character vectors, cosine similarity, synonym normalization, distinguishing-attribute guards and mutual best matches with an ambiguity margin. This is a local JavaScript implementation, not a neural embedding model. Word/character feature extraction and normalized-vector similarity are established lightweight techniques; see the primary [scikit-learn feature-extraction documentation](https://scikit-learn.org/stable/modules/feature_extraction.html).
+
+The browsing feed now ranks themed shelves and products using local activity, fading preferences, unit-value and special-price signals, and diversity penalties. Requests are lazy and limited to two shelf jobs at once. See [design and limitations](../RECOMMENDATIONS.md).
 
 ## Operational choices
 
