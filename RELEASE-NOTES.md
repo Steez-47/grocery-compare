@@ -1,12 +1,12 @@
-Grocery Compare 0.4.1: per-kilogram produce comparisons.
+Grocery Compare 0.4.2: real member prices from both stores.
 
-- Correct New World's BOTH sale type for per-kilogram produce, including bananas, lemons and apples.
-- Match loose produce across generic store brands, ignoring order-weight wording while preserving varieties, organic claims and prepared forms.
-- Keep individually priced items and fixed-size bags separate from loose per-kilo products.
-- Use retailer weight minimums and increments, including shared valid increments for paired products where possible.
-- Label per-kilogram prices in similar-item suggestions too.
-- Repair old misclassified basket entries while preserving their quantities and prices, and require a refresh for their weight metadata.
+- Read New World's actual Club+ Deal reward price and matching unit price.
+- Read Woolworths Member Price from its public product feed, verifying the selected pickup and fulfilment store on every response.
+- Keep current non-member prices separate from historical was prices. Membership switches update comparison prices and basket totals.
+- Exclude expired, targeted and multibuy offers from single-item estimates. Preserve each/per-kilo pricing and require old saved prices to refresh.
+- Cache exact product lookups and keep ordinary catalogue prices usable if a member-price lookup is unavailable.
+- Include the completed cart improvements: accurate line rounding, clearer store choices and a collapsible basket.
 
-Validated with 65 automated tests and hidden native app checks, including live banana/lemon pairing and valid basket weight increments at both stores. Sample live results also paired Royal Gala, Granny Smith, Rose and Ambrosia apples, loose/truss tomatoes, potatoes and red kumara.
+Validation: 92 automated tests, live catalogue checks at New World Broadway and Woolworths Kelvin Grove, and hidden native checks for browsing, produce, member-price switches and persistence.
 
-The browser companion is unchanged. Signed-in cart transfer remains experimental; final checkout and payment stay at the retailer. The installer is unsigned.
+Research and API details are in research/README.md. The retailer's final checkout remains authoritative; the browser companion is unchanged.

@@ -1,5 +1,20 @@
 # Integration findings · 5 September 2026
 
+## Member prices · verified 6 September 2026
+
+New World now calls its member offers **Club+ Deals** ([official explanation](https://www.newworld.co.nz/promotions/3-ways-to-save)). Woolworths calls the offer **Member Price** ([official explanation](https://www.woolworths.co.nz/info/value)). Both can be retrieved in anonymous catalogue sessions; eligibility at checkout still depends on the retailer account.
+
+- New World's `singlePrice.price` is the ordinary price. Single-item member prices come from `promotions` with `rewardType: NEW_PRICE`, `threshold: 1`, `cardDependencyFlag: true` and `rewardValue` in cents. The promotion has its own comparative price. Multibuy totals and bonus rewards are not single-item prices. At Broadway, Mainland Buttersoft 375g returned 1,299 cents ordinary and 1,139 member.
+- Woolworths' current storefront code reads `tags[type=MemberPrice].decisionInputs.promotionalPrice` in cents. The inspected live GraphQL guest responses omitted these tags. `isClubPrice` alone therefore misses current offers, and `wasPrice` is not a current non-member price.
+- The retailer's still-active `/api/v1/products/{sku}` feed supplies `price.salePrice`, `originalPrice`, `isClubPrice`, comparison-unit prices and promotion dates. At Kelvin Grove it returned Woolworths Haloumi 200g at $6.50 member and $6.89 ordinary. The corresponding [product page](https://www.woolworths.co.nz/shop/product-details/6001481/woolworths-haloumi-cheese) had different pricing in live HTML and recent search-index snapshots during investigation.
+- This REST feed has a separate location session. `GET /api/v1/addresses/pickup-addresses` provides legacy pickup-address IDs; `PUT /api/v1/fulfilment/my/pickup-addresses` with `{addressId}` selects one in the isolated guest session. Kelvin Grove address `1093410` and GraphQL pickup `9424` both resolve to fulfilment store `9470`. Every price response must confirm both identifiers. This corrects the earlier assumption that the old products API was no longer useful.
+- Location discovery was informed by the author's [historical public client](https://github.com/adrian-baker/woolies-mcp/blob/f56e814f7211cd6f26b589c8f3975f8323006fd7/src/woolworths/api.ts); requests were independently verified against Woolworths. Keyword searches joined with `OR` silently broaden, so the app uses exact SKU details, up to four concurrent requests, a bounded three-minute cache, and serialized store changes.
+- Enrichment requires matching SKU, unit and ordinary price across the feeds. Expired/future, targeted and multibuy offers are excluded. Each variants never receive a per-kilo price: both explicit each prices must exist. Failures retain ordinary prices with a concise unavailable label. There is no default-store fallback.
+
+Version 0.4.2 uses eligible prices in comparisons, basket estimates and recommendation unit-value signals. Old saved products are marked stale for refresh. Single-item promotional quantity limits are retained; cross-product assorted limits and multibuy combination optimization are not calculated.
+
+Live sample coverage: first-page butter results included 14 New World and 5 Woolworths member offers; haloumi included one at each store. Butter, haloumi and banana searches had no failed Woolworths member-price lookups. Counts and offers can change.
+
 ## Feasibility
 
 Both websites expose interfaces that their own storefronts use. The absence of a supported public developer API does not prevent a prototype. It does make ongoing compatibility and reliable checkout the expensive parts. I found no documented, supported public API covering consumer store selection, both catalogues and both carts.

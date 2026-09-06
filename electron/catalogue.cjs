@@ -1,4 +1,6 @@
 const crypto = require('node:crypto');
+const {nwPricing,wwMemberTag}=require('./pricing.cjs');
+const {WoolworthsMembers}=require('./woolworths-members.cjs');
 const WW = 'https://www.woolworths.co.nz';
 const NW = 'https://www.newworld.co.nz';
 const NWAPI = 'https://api-prod.newworld.co.nz/v1/edge';
@@ -7,21 +9,18 @@ const money = x => typeof x === 'number' && Number.isFinite(x) && x >= 0 ? Math.
 const title = s => String(s||'').replace(/\b\w/g,c=>c.toUpperCase());
 const sizeOf = s => String(s||'').match(/(?:\d+\s*[x×]\s*)?\d+(?:\.\d+)?\s*(?:kg|g|ml|l|pk|pack|ea)\b/i)?.[0] || '';
 function nwProduct(p,store){
- const price = p.singlePrice?.price ?? p.price;
- if(!p.productId || !Number.isFinite(price)) return null;
+ const pricing=nwPricing(p);
+ if(!p.productId || !pricing) return null;
  const promo=p.promotions?.find(x=>x.bestPromotion)||p.promotions?.[0];
- const member=Boolean(promo?.cardDependencyFlag);
  const name=[p.brand,p.name,p.displayName].filter(Boolean).join(' ').trim();
  const weighted=p.saleType==='WEIGHT'||p.saleType==='BOTH'&&/-KGM-/.test(p.productId);
  const weight=p.variableWeight||{},scale=/^kg$/i.test(weight.stepUnitOfMeasure||weight.unitOfMeasure||'g')?1:1000;
  const minimum=Number(weight.minOrderQuantity)/scale,increment=Number(weight.stepSize)/scale;
- const cup=p.singlePrice?.comparativePrice;
  return {retailer:'newworld',id:p.productId,name,brand:p.brand||'',size:p.displayName||'',barcode:p.barcode||p.gtin||'',
   image:p.productImageUrls?.[0]||p.productImageUrl||`https://a.fsimg.co.nz/product/retail/fan/image/400x400/${p.productId.split('-')[0]}.png`,
   categories:Object.values(p.categoryTrees?.[0]||{}).filter(Boolean),tags:(p.facets||[]).map(f=>f.itemDescription).filter(Boolean),special:Boolean(promo||p.decalCode),healthStar:null,
-  cents:Math.round(price),regularCents:member?null:Math.round(price),member,offer:promo?.description||'',
-  unit:weighted?'kg':'each',min:weighted&&minimum>0?minimum:weighted?0.1:1,step:weighted&&increment>0?increment:weighted?0.1:1,max:99,
-  unitPrice:cup&&Number.isFinite(cup.pricePerUnit)?`$${(cup.pricePerUnit/100).toFixed(2)} / ${cup.measureDescription||cup.unitQuantityUom}`:'',
+  ...pricing,
+  unit:weighted?'kg':'each',min:weighted&&minimum>0?minimum:weighted?0.1:1,step:weighted&&increment>0?increment:weighted?0.1:1,max:Math.min(99,pricing.memberLimit||99),
   available:p.availability?.includes('ONLINE')??true,restricted:Boolean(p.tobaccoFlag||p.liquorFlag),
   storeId:store.id,checkedAt:new Date().toISOString(),url:`${NW}/shop/product/${p.productId.toLowerCase().replaceAll('-','_')}`};
 }
@@ -32,25 +31,27 @@ function wwProducts(data,store){
   const price=v.variantPrice,unit=v.purchaseUnit;
   if(money(price?.sellingPrice)===null)return null;
   const weighted=unit?.unit==='KILOGRAM'||v.unitOfMeasure==='KG'||/-KG$/.test(v.variantKey);
+  const tag=wwMemberTag(p,weighted),base=money(price.sellingPrice),discount=tag&&tag.cents<base?tag:null;
+  const unitPrice=price.cupPrice!=null?`$${Number(price.cupPrice).toFixed(2)} / ${price.cupUnit||''}`:'';
   const quantity=(value,fallback)=>Number.isFinite(value)&&value>0?Number(value.toFixed(3)):fallback;
   return {retailer:'woolworths',id:v.variantKey,sku:p.sku,name:v.name||p.productName,brand:p.brand||'',size:weighted?'kg':sizeOf(v.name||p.productName),barcode:'',
-   image:p.imageUrl||'',cents:money(price.sellingPrice),regularCents:money(price.wasPrice)??(price.isClubPrice?null:money(price.sellingPrice)),member:!!price.isClubPrice,
+   image:p.imageUrl||'',priceVersion:2,cents:discount?.cents??base,regularCents:discount?base:price.isClubPrice?null:base,wasCents:money(price.wasPrice),member:!!(discount||price.isClubPrice),regularUnitPrice:price.isClubPrice?'':unitPrice,
    categories:Object.values(p.categoryHierarchyNames||{}).flat().filter(x=>x&&x!=='All Departments'),tags:[],special:!!price.isSpecial,healthStar:p.healthStarRating??null,
    offer:'',unit:weighted?'kg':'each',
    min:quantity(unit?.minimumQty,1),step:quantity(unit?.incrementQty,1),max:quantity(unit?.maximumQty,99),
-   unitPrice:price.cupPrice!=null?`$${Number(price.cupPrice).toFixed(2)} / ${price.cupUnit||''}`:'',
+   unitPrice:discount?discount.unitPrice:unitPrice,
    available:!['OutOfStock','OUT_OF_STOCK','Unavailable'].includes(v.availabilityStatus),restricted:!!(p.isTobacco||p.isAlcohol),
    storeId:store.id,fulfilmentStoreId:p.storeKey,checkedAt:new Date().toISOString(),url:`${WW}/shop/productdetails?stockcode=${p.sku}`};
  })).filter(Boolean);
 }
-const productFields = `sku productName brand imageUrl storeKey isAlcohol isTobacco categoryHierarchyNames { lvl0 lvl1 lvl2 lvl3 } healthStarRating variants { variantKey name unitOfMeasure availabilityStatus purchaseUnit { unit minimumQty maximumQty incrementQty defaultQty } variantPrice { sellingPrice wasPrice isClubPrice isSpecial cupPrice cupUnit } }`;
+const productFields = `sku productName brand imageUrl storeKey isAlcohol isTobacco tags { type decisionInputs } categoryHierarchyNames { lvl0 lvl1 lvl2 lvl3 } healthStarRating variants { variantKey name unitOfMeasure availabilityStatus purchaseUnit { unit minimumQty maximumQty incrementQty defaultQty } variantPrice { sellingPrice wasPrice isClubPrice isSpecial cupPrice cupUnit } }`;
 const WSEARCH=`query ProductSearch($input:CompositeSearchInput!){My{myKey products(searchInput:$input){totalCount totalPages results{...on ProductSummary{${productFields}} ...on SponsoredProduct{${productFields}}}}}}`;
 const WCART=`query CustomerCart{customerCart{key shoppingMode{mode pickupLocationId pickupLocation{id name}} lineItems{sku productVariantSku quantity} validationResult{failedValidations{message}}}}`;
 const WSTORE=`mutation SetCartShoppingMode($input:SetCartShoppingModeInput!){setCartShoppingMode(input:$input){shoppingMode{mode pickupLocationId pickupLocation{id name}} validationResult{failedValidations{message}}}}`;
 const WSET=`mutation SetCartLineItemQuantity($input:SetCartLineItemQuantitiesInput!){setCartLineItemQuantity(input:$input){key lineItems{sku productVariantSku quantity} validationResult{failedValidations{message}}}}`;
 
 class Catalogue {
- constructor(transports){this.transports=transports;this.nwAuth=null;this.storesCache=null;this.wwStore=null;this.wwQueue=Promise.resolve();this.cache=new Map();}
+ constructor(transports){this.transports=transports;this.nwAuth=null;this.storesCache=null;this.wwStore=null;this.wwQueue=Promise.resolve();this.cache=new Map();this.wwMembers=new WoolworthsMembers((path,init={})=>this.json('woolworths',WW+'/api/v1'+path,{...init,headers:{'X-Requested-With':'OnlineShopping.WebApp','X-UI-Ver':'7.76.44'}}));}
  async json(retailer,url,init={},checkout=false){
   const r=await this.transports[retailer](url,{...init,headers:{'user-agent':UA,accept:'application/json','content-type':'application/json',...init.headers},signal:AbortSignal.timeout(30000)},checkout);
   if(!r.ok)throw new Error(r.status===401?'Sign in to the store to continue.':r.status===403?'Open the store and complete its verification check.':`The store returned an error (${r.status}). Try again.`);
@@ -107,7 +108,7 @@ class Catalogue {
      this.wwStore=store.id;
     }
     const d=await this.gql(WSEARCH,{input:{[options.category?.key?'byCategoryKey':'byKeyword']:{value:options.category?.key||query,sortBy:'RELEVANCE',pageSize:36,pageIndex:page}}});
-    return {products:wwProducts(d,store),total:d.My.products.totalCount,pages:d.My.products.totalPages};
+    return {products:await this.wwMembers.enrich(wwProducts(d,store),store,force),total:d.My.products.totalCount,pages:d.My.products.totalPages};
    };
    const job=this.wwQueue.then(work,work);this.wwQueue=job.catch(()=>{});result=await job;
   }

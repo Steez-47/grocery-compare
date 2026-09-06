@@ -1,7 +1,7 @@
 export type Retailer='newworld'|'woolworths';
 export type Policy=Retailer|'cheapest';
 export interface Store{id:string;name:string;address:string;region?:string}
-export interface Product{retailer:Retailer;id:string;sku?:string;name:string;brand:string;size:string;barcode:string;image:string;cents:number;regularCents:number|null;member:boolean;offer:string;unit:'each'|'kg';min:number;max:number;step:number;unitPrice:string;available:boolean;restricted:boolean;storeId:string;checkedAt:string;url:string;categories?:string[];tags?:string[];special?:boolean;healthStar?:number|null}
+export interface Product{retailer:Retailer;id:string;sku?:string;name:string;brand:string;size:string;barcode:string;image:string;cents:number;regularCents:number|null;member:boolean;priceVersion?:number;wasCents?:number|null;regularUnitPrice?:string;memberPriceStatus?:string;offer:string;unit:'each'|'kg';min:number;max:number;step:number;unitPrice:string;available:boolean;restricted:boolean;storeId:string;checkedAt:string;url:string;categories?:string[];tags?:string[];special?:boolean;healthStar?:number|null}
 export interface Row{key:string;product:Product;offers:Partial<Record<Retailer,Product>>;equivalent?:boolean}
 export interface CategorySource{path:string[];key?:string}
 export interface Aisle{id:string;name:string;sources:Record<Retailer,CategorySource>}

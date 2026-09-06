@@ -2,6 +2,7 @@ const fs=require('node:fs/promises');
 const {clean}=require('./products.cjs');
 const {key,pairKey,textScore,tokenise}=require('./matching.cjs');
 const {effectivePrice}=require('./model.cjs');
+const {effectiveUnitPrice}=require('./pricing.cjs');
 const DAY=86400000;
 const emptyProfile=()=>({version:1,enabled:true,theme:'system',revision:0,products:{},brands:{},interests:{},aisles:{},seen:{},confirmed:[],rejected:[]});
 const value=(entry,now)=>Number.isFinite(entry?.value)&&Number.isFinite(entry?.updated)?entry.value*Math.pow(0.5,Math.max(0,now-entry.updated)/(30*DAY)):0;
@@ -29,12 +30,12 @@ function unitValue(p){const m=String(p.unitPrice||'').match(/\$([\d.]+)\s*\/\s*(
 function rankRows(rows,profile,{now=Date.now(),basket=[],loyalty={newworld:true,woolworths:true},source=null,limit=6}={}){
  const inBasket=new Set(basket.flatMap(l=>Object.values(l.offers).map(key))),units=new Map();
  const candidates=rows.map(row=>{const offers=Object.values(row.offers).filter(p=>p.available&&!p.restricted&&effectivePrice(p,loyalty[p.retailer])!==null);if(!offers.length)return null;
-  const p=offers.reduce((a,b)=>affinity(a,profile,now)>=affinity(b,profile,now)?a:b),u=unitValue(p);
+  const p=offers.reduce((a,b)=>affinity(a,profile,now)>=affinity(b,profile,now)?a:b),u=unitValue({...p,unitPrice:effectiveUnitPrice(p,loyalty[p.retailer])});
   if(u){const values=units.get(u.unit)||[];values.push(u.value);units.set(u.unit,values)}
   return {row,p,offers,u};
  }).filter(Boolean).filter(c=>!c.offers.every(p=>inBasket.has(key(p)))&&(!profile.enabled||value(profile.products[key(c.p)],now)>-5));
  for(const c of candidates){
-  const discount=Math.max(...c.offers.map(p=>p.regularCents>p.cents?(p.regularCents-p.cents)/p.regularCents:0));
+  const discount=Math.max(...c.offers.map(p=>{const price=effectivePrice(p,loyalty[p.retailer]),base=p.wasCents??p.regularCents;return base>price?(base-price)/base:0}));
   const seen=profile.enabled?profile.seen[key(c.p)]:null;
   const exposure=seen?Math.min(1.5,seen.count*0.2)*Math.pow(0.5,Math.max(0,now-seen.last)/(3*DAY)):0;
   const unitRank=c.u?(units.get(c.u.unit)||[]).filter(n=>n>c.u.value).length/Math.max(1,units.get(c.u.unit)?.length):0;

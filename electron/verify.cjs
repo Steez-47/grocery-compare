@@ -94,6 +94,7 @@ async function run({win,cat,app}){
   await js('document.querySelector(".basket-line button[aria-label^=Remove]").click()');await until('Boolean(document.querySelector(".basket-empty"))');
  }
  report.checks.push('Live bananas and lemons pair per kg; basket increments are valid for both stores');
+ await require('./verify-members.cjs').verifyMembers({cat,state,js,until,win,report});
  const before=await js('window.grocery.preferences()');assert(before.revision>0);
  await js('document.querySelector(".store-picker").click()');await until('Boolean(document.querySelector(".recommendation-settings"))');
  await js('document.querySelector(".recommendation-settings input").click()');await until('(async()=>!(await window.grocery.preferences()).enabled)()');
