@@ -19,4 +19,4 @@ The NSIS upgrade implementation passes `--updated` to the previous uninstaller, 
 
 Local data lives under `%APPDATA%\grocery-compare`, separate from installed app binaries: shopping.json, recommendations.json, settings and browser-session data. The release file allowlist excludes local profiles, test results, research captures and credentials.
 
-The GitHub repository is private. Downloads require signing into an account that has repository access. The installer is unsigned, so Windows may show an unknown-publisher warning.
+The GitHub repository and release downloads are public. No GitHub account is needed. The installer is unsigned, so Windows may show an unknown-publisher warning.

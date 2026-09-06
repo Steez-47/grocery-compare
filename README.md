@@ -4,7 +4,7 @@ A small Windows app for New World and Woolworths New Zealand. Choose a store for
 
 ## Use
 
-Download `Grocery-Compare-Setup-0.5.2.exe` from the [latest release](https://github.com/Steez-47/grocery-compare/releases/latest). This repository is private, so sign into an account with access first. Windows may ask you to confirm running the unsigned installer.
+Download `Grocery-Compare-Setup-0.5.2.exe` from the [latest release](https://github.com/Steez-47/grocery-compare/releases/latest). Downloads are public; no GitHub account is needed. Windows may ask you to confirm running the unsigned installer.
 
 **Updating:** close Grocery Compare and run the newer installer using the same Windows account. It updates the existing installation in place; you do not need to uninstall first. Your basket, stores and preferences stay on that computer. Updates are installed manually by downloading the newer installer.
 
