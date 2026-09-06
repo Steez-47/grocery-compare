@@ -12,13 +12,15 @@ function nwProduct(p,store){
  const promo=p.promotions?.find(x=>x.bestPromotion)||p.promotions?.[0];
  const member=Boolean(promo?.cardDependencyFlag);
  const name=[p.brand,p.name,p.displayName].filter(Boolean).join(' ').trim();
- const weighted=p.saleType==='WEIGHT';
+ const weighted=p.saleType==='WEIGHT'||p.saleType==='BOTH'&&/-KGM-/.test(p.productId);
+ const weight=p.variableWeight||{},scale=/^kg$/i.test(weight.stepUnitOfMeasure||weight.unitOfMeasure||'g')?1:1000;
+ const minimum=Number(weight.minOrderQuantity)/scale,increment=Number(weight.stepSize)/scale;
  const cup=p.singlePrice?.comparativePrice;
  return {retailer:'newworld',id:p.productId,name,brand:p.brand||'',size:p.displayName||'',barcode:p.barcode||p.gtin||'',
   image:p.productImageUrls?.[0]||p.productImageUrl||`https://a.fsimg.co.nz/product/retail/fan/image/400x400/${p.productId.split('-')[0]}.png`,
   categories:Object.values(p.categoryTrees?.[0]||{}).filter(Boolean),tags:(p.facets||[]).map(f=>f.itemDescription).filter(Boolean),special:Boolean(promo||p.decalCode),healthStar:null,
   cents:Math.round(price),regularCents:member?null:Math.round(price),member,offer:promo?.description||'',
-  unit:weighted?'kg':'each',min:weighted?0.1:1,step:weighted?0.1:1,max:99,
+  unit:weighted?'kg':'each',min:weighted&&minimum>0?minimum:weighted?0.1:1,step:weighted&&increment>0?increment:weighted?0.1:1,max:99,
   unitPrice:cup&&Number.isFinite(cup.pricePerUnit)?`$${(cup.pricePerUnit/100).toFixed(2)} / ${cup.measureDescription||cup.unitQuantityUom}`:'',
   available:p.availability?.includes('ONLINE')??true,restricted:Boolean(p.tobaccoFlag||p.liquorFlag),
   storeId:store.id,checkedAt:new Date().toISOString(),url:`${NW}/shop/product/${p.productId.toLowerCase().replaceAll('-','_')}`};
@@ -29,11 +31,13 @@ function wwProducts(data,store){
   if(!p.sku||seen.has(v.variantKey))return null;seen.add(v.variantKey);
   const price=v.variantPrice,unit=v.purchaseUnit;
   if(money(price?.sellingPrice)===null)return null;
-  return {retailer:'woolworths',id:v.variantKey,sku:p.sku,name:v.name||p.productName,brand:p.brand||'',size:sizeOf(v.name||p.productName),barcode:'',
+  const weighted=unit?.unit==='KILOGRAM'||v.unitOfMeasure==='KG'||/-KG$/.test(v.variantKey);
+  const quantity=(value,fallback)=>Number.isFinite(value)&&value>0?Number(value.toFixed(3)):fallback;
+  return {retailer:'woolworths',id:v.variantKey,sku:p.sku,name:v.name||p.productName,brand:p.brand||'',size:weighted?'kg':sizeOf(v.name||p.productName),barcode:'',
    image:p.imageUrl||'',cents:money(price.sellingPrice),regularCents:money(price.wasPrice)??(price.isClubPrice?null:money(price.sellingPrice)),member:!!price.isClubPrice,
    categories:Object.values(p.categoryHierarchyNames||{}).flat().filter(x=>x&&x!=='All Departments'),tags:[],special:!!price.isSpecial,healthStar:p.healthStarRating??null,
-   offer:'',unit:unit?.unit==='KILOGRAM' || v.unitOfMeasure==='KG' || /-KG$/.test(v.variantKey)?'kg':'each',
-   min:unit?.minimumQty||1,step:unit?.incrementQty||1,max:unit?.maximumQty||99,
+   offer:'',unit:weighted?'kg':'each',
+   min:quantity(unit?.minimumQty,1),step:quantity(unit?.incrementQty,1),max:quantity(unit?.maximumQty,99),
    unitPrice:price.cupPrice!=null?`$${Number(price.cupPrice).toFixed(2)} / ${price.cupUnit||''}`:'',
    available:!['OutOfStock','OUT_OF_STOCK','Unavailable'].includes(v.availabilityStatus),restricted:!!(p.isTobacco||p.isAlcohol),
    storeId:store.id,fulfilmentStoreId:p.storeKey,checkedAt:new Date().toISOString(),url:`${WW}/shop/productdetails?stockcode=${p.sku}`};

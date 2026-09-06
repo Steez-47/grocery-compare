@@ -1,14 +1,12 @@
-Grocery Compare 0.4.0: compact design, dark mode and browser checkout.
+Grocery Compare 0.4.1: per-kilogram produce comparisons.
 
-- Smaller header, cards, gaps and basket controls, with consistent colours across the interface.
-- Light and dark modes from the moon/sun button; the choice is saved independently of recommendation history.
-- Open retailer carts in the Windows default browser and sign in there normally.
-- Included Edge/Chrome browser companion for sending cart requests through the existing browser session. Cookies stay in the browser.
-- One-time setup from Stores → Browser connection or from checkout: load the included companion folder in the browser's Extensions page, then connect.
-- Paired local connection with restricted cart operations, expired-request handling, and a New World guest-login guard.
+- Correct New World's BOTH sale type for per-kilogram produce, including bananas, lemons and apples.
+- Match loose produce across generic store brands, ignoring order-weight wording while preserving varieties, organic claims and prepared forms.
+- Keep individually priced items and fixed-size bags separate from loose per-kilo products.
+- Use retailer weight minimums and increments, including shared valid increments for paired products where possible.
+- Label per-kilogram prices in similar-item suggestions too.
+- Repair old misclassified basket entries while preserving their quantities and prices, and require a refresh for their weight metadata.
 
-Your existing basket, stores and recommendation history are preserved. Existing embedded-browser logins remain separate from the main browser.
+Validated with 65 automated tests and hidden native app checks, including live banana/lemon pairing and valid basket weight increments at both stores. Sample live results also paired Royal Gala, Granny Smith, Rose and Ambrosia apples, loose/truss tomatoes, potatoes and red kumara.
 
-Validated with 53 automated tests and hidden native app checks for compact layout, both themes, browsing, basket persistence and checkout/setup controls. An isolated real Edge test confirmed companion pairing and command/result delivery. Live retailer pages encountered HTTP/2/loading errors in that hidden test, so signed-in cart transfer still needs verification after setup with the account holder.
-
-The companion requires one manual installation in Edge or Chrome. No cookie database extraction or heavy AI model is used. Final payment remains at the retailer. The installer is unsigned.
+The browser companion is unchanged. Signed-in cart transfer remains experimental; final checkout and payment stay at the retailer. The installer is unsigned.

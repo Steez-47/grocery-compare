@@ -1,4 +1,5 @@
 const {clean,sizeKey,houseBrand,productWords}=require('./products.cjs');
+const {produceKey}=require('./produce.cjs');
 const aliases={spreadable:'spread',powdered:'powder',granulated:'granule',granules:'granule',sweets:'lolly',lollies:'lolly',candy:'lolly',yogurt:'yoghurt',flavoured:'flavour',flavored:'flavour',flavouring:'flavour',cookies:'cookie',biscuits:'biscuit',tomatoes:'tomato',potatoes:'potato',choc:'chocolate',chocolates:'chocolate',beans:'bean',noodles:'noodle',sachets:'sachet',capsules:'pod',capsule:'pod',pods:'pod',sliced:'slice',chips:'chip'};
 const filler=new Set(['fresh','premium','pure','natural','naturally','new','zealand','nz','style','pack','packet','jar','bottle','delicious','tasty','flavour','traditional','quality','authentic','finest']);
 const critical=new Set(['semi','buttersoft','unsalted','reduced','organic','decaf','decaffeinated','caffeine','gluten','lactose','dairy','vegan','vegetarian','light','trim','blue','protein','uht','wholemeal','wheatmeal','multigrain','white','sandwich','toast','thick','thin','fibre','skinless','boneless','breast','thigh','drumstick','mince','powder','granule','bean','ground','instant','pod','capsule','strawberry','banana','raspberry','blackberry','blueberry','vanilla','chocolate','caramel','hazelnut','mint','lemon','orange','garlic','herb','honey','chilli','bbq','sour','sweet','dark','medium','strong','jumbo']);
@@ -41,6 +42,8 @@ function conflict(a,b){
 function textScore(a,b){const x=vector(a),y=vector(b);return cosine(x.features,y.features);}
 function pairScore(a,b,legacy=()=>0){
  if(a.retailer===b.retailer||a.unit!==b.unit)return {accepted:false,score:0};
+ const produceA=produceKey(a),produceB=produceKey(b);
+ if(produceA||produceB)return {accepted:!!produceA&&produceA===produceB,score:produceA===produceB?290:0,kind:'produce'};
  const x=vector(a),y=vector(b),house=x.brand!==y.brand&&houseBrand(a)&&houseBrand(b);
  if(!x.size||x.size!==y.size||(!house&&x.brand!==y.brand)||!x.brand||!y.brand)return {accepted:false,score:0};
  if(a.barcode&&b.barcode&&!house&&a.barcode!==b.barcode)return {accepted:false,score:0};
@@ -64,7 +67,7 @@ function pairScore(a,b,legacy=()=>0){
 }
 function group(products,legacy,feedback={}){
  const unique=[...new Map(products.map(p=>[key(p),p])).values()],blocks=new Map(),scores=new Map();
- unique.forEach((p,i)=>{const v=vector(p),block=[houseBrand(p)?'house':v.brand,p.unit,v.size].join('|');const list=blocks.get(block)||[];list.push(i);blocks.set(block,list)});
+ unique.forEach((p,i)=>{const v=vector(p),produce=produceKey(p),block=produce?'produce|'+produce:[houseBrand(p)?'house':v.brand,p.unit,v.size].join('|');const list=blocks.get(block)||[];list.push(i);blocks.set(block,list)});
  const rejected=new Set(feedback.rejected||[]),confirmed=new Set(feedback.confirmed||[]);let comparisons=0;
  for(const ids of blocks.values())for(let ai=0;ai<ids.length;ai++)for(let bi=ai+1;bi<ids.length;bi++){
   const i=ids[ai],j=ids[bi],a=unique[i],b=unique[j];if(a.retailer===b.retailer)continue;comparisons++;

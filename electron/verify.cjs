@@ -80,6 +80,20 @@ async function run({win,cat,app}){
  await js(`document.querySelector('[aria-label="Close checkout"]').click()`);
  await js(`document.querySelector('.basket-line button[aria-label^="Remove"]').click()`);await until('Boolean(document.querySelector(".basket-empty"))');
  report.checks.push('Remove returns to empty basket');
+ const {quantityRules,validateQuantity}=require('./model.cjs');
+ for(const query of ['bananas','lemons']){
+  const data=await Promise.all(['newworld','woolworths'].map(r=>cat.search(r,state.stores[r],query)));
+  const rows=await js(`window.grocery.compare(${JSON.stringify(data.flatMap(d=>d.products))})`);
+  const pair=rows.find(r=>r.offers.newworld?.unit==='kg'&&r.offers.woolworths?.unit==='kg');assert(pair,'Missing produce pair: '+query);
+  const rules=quantityRules(pair);assert(Object.values(pair.offers).every(p=>validateQuantity(rules.min,p)));
+  await js(`window.grocery.save(${JSON.stringify({...state,basket:[{...pair,quantity:rules.min,preferred:'cheapest'}]})})`);await win.loadURL(win.webContents.getURL());
+  await until('document.querySelector(".stepper span")?.textContent.includes("kg")');await js('document.querySelector(".stepper button[aria-label^=More]").click()');
+  await until(`document.querySelector(".stepper span")?.textContent === "${Number((rules.min+rules.step).toFixed(3))} kg"`);
+  await until('(async()=>{const s=await window.grocery.load();return s.basket[0]?.quantity>'+rules.min+'})()');
+  const saved=await js('window.grocery.load()');assert(Object.values(pair.offers).every(p=>validateQuantity(saved.basket[0].quantity,p)));
+  await js('document.querySelector(".basket-line button[aria-label^=Remove]").click()');await until('Boolean(document.querySelector(".basket-empty"))');
+ }
+ report.checks.push('Live bananas and lemons pair per kg; basket increments are valid for both stores');
  const before=await js('window.grocery.preferences()');assert(before.revision>0);
  await js('document.querySelector(".store-picker").click()');await until('Boolean(document.querySelector(".recommendation-settings"))');
  await js('document.querySelector(".recommendation-settings input").click()');await until('(async()=>!(await window.grocery.preferences()).enabled)()');

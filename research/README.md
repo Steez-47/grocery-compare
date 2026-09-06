@@ -57,3 +57,7 @@ Electron's [WebContentsView](https://www.electronjs.org/docs/latest/api/web-cont
 ## Version 0.4.0 browser handoff
 
 The app now opens checkout in the Windows default browser. An included Edge/Chrome companion keeps retailer authentication in that browser and runs fixed cart operations through a paired loopback connection. A real, isolated Edge test confirmed pairing and command/result delivery. Live retailer navigation in the hidden guest profile hit HTTP/2/loading errors, so signed-in browser cart transfer remains unverified. New World anonymous JWT roles were inspected without retaining credentials; `ANONYMOUS` sessions are refused by the companion. See [browser checkout](../BROWSER-CHECKOUT.md).
+
+## Version 0.4.1 produce
+
+On 6 September, live New World bananas and lemons used `saleType: BOTH` with a `-KGM-` product ID and a per-kilo price. The adapter previously recognized only `WEIGHT`, incorrectly treating these as each. `variableWeight.minOrderQuantity` and `stepSize` supply gram-based limits. Woolworths supplies separate `-KG` and `-EA` variants; names such as Min Order 250g are order metadata, not a fixed pack size. Normalized decimal limits and a dedicated fresh-produce comparison now pair loose commodities by type and variety. Unit tests guard against mixing each prices, bags, organic variants, cooking bananas and prepared foods.

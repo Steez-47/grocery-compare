@@ -4,7 +4,7 @@ A small Windows app for New World and Woolworths New Zealand. Choose a store for
 
 ## Use
 
-Install `Grocery-Compare-Setup-0.4.0.exe` from this private repository's Releases page. Windows may ask you to confirm running the unsigned installer.
+Install `Grocery-Compare-Setup-0.4.1.exe` from this private repository's Releases page. Windows may ask you to confirm running the unsigned installer.
 
 1. Choose your New World and Woolworths pickup locations.
 2. Browse themed shelves with four suggestions, quick-add and See more, or search and choose a department and aisle. Products matched across the stores appear first, with both prices on one card. Filter loaded products by brand, house brands, specials or availability.
@@ -54,3 +54,5 @@ See [the integration research](research/README.md) for endpoints, evidence and v
 See [matching and recommendation design](RECOMMENDATIONS.md) for scoring, local history and limits.
 
 See [available metadata](METADATA.md) for category, pricing, dietary and product-detail fields.
+
+Loose per-kilogram produce now compares across stores independently of generic store brands. Fixed bags and individually priced variants remain separate. Basket controls use retailer weight minimums and increments; when paired items share a valid weight grid, both offers use it. An old misclassified produce line is marked for Refresh without changing its saved quantity.
