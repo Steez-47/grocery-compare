@@ -41,7 +41,7 @@ function linePrice(p,quantity,member){
  return Math.floor(amount/scale)+(amount%scale>=scale/2?1:0);
 }
 function selectOffer(line,policy,loyalty){
- const offers=Object.values(line.offers).filter(p=>p&&p.available&&['newworld','woolworths'].includes(p.retailer)&&linePrice(p,line.quantity,loyalty[p.retailer])!==null);
+ const offers=Object.values(line.offers).filter(p=>p&&p.available&&!p.restricted&&['newworld','woolworths'].includes(p.retailer)&&linePrice(p,line.quantity,loyalty[p.retailer])!==null);
  if(policy!=='cheapest')return offers.find(p=>p.retailer===policy)||null;
  if(line.preferred&&line.preferred!=='cheapest')return offers.find(p=>p.retailer===line.preferred)||null;
  return offers.sort((a,b)=>effectivePrice(a,loyalty[a.retailer])-effectivePrice(b,loyalty[b.retailer]))[0]||null;
@@ -82,4 +82,15 @@ function repairWeightProduct(p){
  if(p.unit==='kg')return {...p,min:Number(p.min.toFixed(3)),step:Number(p.step.toFixed(3)),max:Number(p.max.toFixed(3))};
  return p;
 }
-module.exports={sameProduct,groupProducts,effectivePrice,linePrice,selectOffer,basketSummary,validateQuantity,quantityRules,fitQuantity,repairWeightProduct,sizeKey,houseBrand,productWords};
+function addToBasket(state,row,quantity,preferred='cheapest'){
+ const p=selectOffer({...row,quantity,preferred},'cheapest',state.loyalty);
+ if(!p)return state;
+ const old=state.basket.find(l=>Object.values(l.offers).some(o=>Object.values(row.offers).some(n=>n?.id===o?.id&&n?.retailer===o?.retailer)));
+ const offers={...old?.offers,...row.offers};
+ const nextQuantity=Number(((old?.quantity||0)+quantity).toFixed(3));
+ const line={...old,...row,key:old?.key||row.key,offers,quantity:nextQuantity,preferred};
+ if(!selectOffer(line,'cheapest',state.loyalty))return state;
+ // The Add button promises the cheapest offer, including after a one-store shop.
+ return {...state,policy:'cheapest',basket:old?state.basket.map(l=>l===old?line:l):[...state.basket,line]};
+}
+module.exports={sameProduct,groupProducts,effectivePrice,linePrice,selectOffer,basketSummary,validateQuantity,quantityRules,fitQuantity,repairWeightProduct,addToBasket,sizeKey,houseBrand,productWords};

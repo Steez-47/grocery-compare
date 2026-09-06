@@ -3,6 +3,7 @@ dist/
 release*/
 research/*
 !research/README.md
+!research/UI-REDESIGN.md
 test-results/
 .env*
 *.log

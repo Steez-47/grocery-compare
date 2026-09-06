@@ -8,7 +8,7 @@ export interface Aisle{id:string;name:string;sources:Record<Retailer,CategorySou
 export interface Department{id:string;name:string;children:Aisle[]}
 export interface Line extends Row{quantity:number;preferred:Policy}
 export interface State{version:1;stores:Record<Retailer,Store|null>;loyalty:Record<Retailer,boolean>;basket:Line[];policy:Policy}
-export interface Results{products:Product[];total:number;pages:number}
+export interface Results{products:Product[];total:number;pages:number;nextPage?:number|null}
 export interface Activity{type:'add'|'view'|'browse'|'dismiss'|'impression';product?:Product;products?:Product[];aisle?:string;query?:string}
 declare global{interface Window{grocery:GroceryAPI}}
 export interface GroceryAPI{
