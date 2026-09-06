@@ -4,11 +4,11 @@ A small Windows app for New World and Woolworths New Zealand. Choose a store for
 
 ## Use
 
-Install `Grocery-Compare-Setup-0.4.1.exe` from this private repository's Releases page. Windows may ask you to confirm running the unsigned installer.
+Install `Grocery-Compare-Setup-0.4.2.exe` from this private repository's Releases page. Windows may ask you to confirm running the unsigned installer.
 
 1. Choose your New World and Woolworths pickup locations.
 2. Browse themed shelves with four suggestions, quick-add and See more, or search and choose a department and aisle. Products matched across the stores appear first, with both prices on one card. Filter loaded products by brand, house brands, specials or availability.
-3. Add items and choose New World, Woolworths, or a split shop. A specific store selected for a line takes priority within the split shop; choose **Cheapest** on that line to compare automatically.
+3. Add items and choose **Best prices across stores**, New World only, or Woolworths only. Individual store choices are under **Store options**. Collapse the sidebar and reopen it with **Basket** in the top bar.
 4. Pams/Value and Woolworths/Essentials products automatically pair when their type, size and distinguishing attributes agree. These are labelled **House-brand equivalent**, with both product names visible. Use **Find match** for other equivalents, or **Similar items** to browse alternatives in other sizes and brands.
 5. Use the moon/sun button for dark or light mode. Continue to checkout to open each store in your usual browser. Install the included Edge/Chrome companion once to send items through that browser session. See [browser setup](BROWSER-CHECKOUT.md). Complete payment with the retailer.
 
@@ -19,7 +19,7 @@ Retailer logins stay in your main browser. The shopping list and recommendation 
 This is an experimental personal app using undocumented website interfaces, not an official retailer integration. Live store selection, search, price normalization and product matching have been tested. **Authenticated basket transfers have not been verified end to end.** Woolworths rejects guest-cart writes; New World may present a verification challenge. A successful transfer is reported only after the retailer's cart quantities are read back.
 
 - Prices use the selected pickup locations. Woolworths can map a pickup location to a different fulfilment store. Delivery prices, slots and fees are finalized by the retailer.
-- Membership settings affect displayed prices. Some non-member prices are unavailable; these stay unavailable instead of becoming zero.
+- **Club+ Deals** and **Member Price** in Stores switch the eligible prices used throughout the app. Public member offers are retrieved without signing in. Woolworths' alternate price feed must confirm the selected location and match the current ordinary price. Failed member lookups keep the ordinary price and an unavailable label; unknown non-member prices stay unavailable. Refresh older saved basket prices after updating. See [member-price research](research/README.md).
 - Totals are estimates before delivery, bags, multibuy combinations and final weighed quantities. Check the retailer's total before paying.
 - Matching combines naming normalization with weighted word and character vectors, guarded by brand, size and distinguishing attributes. Ambiguous matches stay separate. Some size-less listings can pair when their displayed unit price supports a narrowly bounded size estimate and the other listing explicitly states that size. Incorrect matches can be separated with the unlink button; the app remembers this. House-brand equivalents are substitutes, not claims of identical ingredients. Search results are paginated; filters apply to loaded results. Use **Show more** to retrieve more products.
 - Sending sets target quantities for the selected products. Existing unrelated products are not intentionally deleted. Changing the location of an occupied cart is refused where it cannot be safely verified. New World may therefore require completing or clearing an existing cart yourself first.
