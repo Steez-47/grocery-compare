@@ -20,12 +20,12 @@ function inferredSize(p){
 function grams(text){const result=new Set();for(const word of text.split(' ')){const s=' '+word+' ';for(let n=2;n<=3;n++)for(let i=0;i+n<=s.length;i++)result.add(s.slice(i,i+n));}return result;}
 function vector(p){
  const fingerprint=JSON.stringify([p.retailer,p.id,p.name,p.brand,p.size,p.unit,p.cents,p.unitPrice,p.member,p.categories]);const old=cache.get(fingerprint);if(old)return old;
- const words=tokenise(p),features=new Map();
+ const words=tokenise(p),features=new Map(),chars=grams(words.join(' '));
  for(const w of words)features.set('w:'+w,critical.has(w)?2.2:1.5);
- for(const g of grams(words.join(' ')))features.set('c:'+g,0.16);
+ for(const g of chars)features.set('c:'+g,0.16);
  let norm=0;for(const v of features.values())norm+=v*v;norm=Math.sqrt(norm)||1;
  for(const [k,v]of features)features.set(k,v/norm);
- const inferred=inferredSize(p);const result={words,features,chars:grams(words.join(' ')),brand:clean(p.brand),size:sizeKey(p.size||inferred?.size),inferred,categories:new Set((p.categories||[]).map(clean))};
+ const inferred=inferredSize(p);const result={words,features,chars,brand:clean(p.brand),size:sizeKey(p.size||inferred?.size),inferred,categories:new Set((p.categories||[]).map(clean))};
  cache.set(fingerprint,result);if(cache.size>3000)cache.delete(cache.keys().next().value);return result;
 }
 function cosine(a,b){let score=0;const [small,big]=a.size<b.size?[a,b]:[b,a];for(const [k,v]of small)score+=v*(big.get(k)||0);return score;}
@@ -68,6 +68,7 @@ function pairScore(a,b,legacy=()=>0){
 function group(products,legacy,feedback={}){
  const unique=[...new Map(products.map(p=>[key(p),p])).values()],blocks=new Map(),scores=new Map();
  unique.forEach((p,i)=>{const v=vector(p),produce=produceKey(p),block=produce?'produce|'+produce:[houseBrand(p)?'house':v.brand,p.unit,v.size].join('|');const list=blocks.get(block)||[];list.push(i);blocks.set(block,list)});
+ const positions=new Map(unique.map((p,i)=>[key(p),i]));
  const rejected=new Set(feedback.rejected||[]),confirmed=new Set(feedback.confirmed||[]);let comparisons=0;
  for(const ids of blocks.values())for(let ai=0;ai<ids.length;ai++)for(let bi=ai+1;bi<ids.length;bi++){
   const i=ids[ai],j=ids[bi],a=unique[i],b=unique[j];if(a.retailer===b.retailer)continue;comparisons++;
@@ -76,7 +77,7 @@ function group(products,legacy,feedback={}){
   if(!result.accepted)continue;for(const [from,to]of [[i,j],[j,i]]){const list=scores.get(from)||[];list.push({index:to,...result});scores.set(from,list)}
  }
  // Explicitly confirmed cross-brand pairs are outside normal brand blocks.
- for(const k of confirmed){if(rejected.has(k))continue;const ids=k.split('|').map(id=>unique.findIndex(p=>key(p)===id));if(ids.some(i=>i<0))continue;const [i,j]=ids;if(unique[i].retailer===unique[j].retailer||unique[i].unit!==unique[j].unit||!sizeKey(unique[i].size)||sizeKey(unique[i].size)!==sizeKey(unique[j].size))continue;
+ for(const k of confirmed){if(rejected.has(k))continue;const ids=k.split('|').map(id=>positions.get(id)??-1);if(ids.some(i=>i<0))continue;const [i,j]=ids;if(unique[i].retailer===unique[j].retailer||unique[i].unit!==unique[j].unit||!sizeKey(unique[i].size)||sizeKey(unique[i].size)!==sizeKey(unique[j].size))continue;
   for(const [from,to]of [[i,j],[j,i]]){const list=(scores.get(from)||[]).filter(s=>s.index!==to);list.push({index:to,score:500,kind:'confirmed'});scores.set(from,list)}
  }
  const best=new Map();for(const [i,list]of scores){list.sort((a,b)=>b.score-a.score);if(list.length===1||list[0].score-list[1].score>=4)best.set(i,list[0]);}

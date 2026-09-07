@@ -1,11 +1,45 @@
 {
- "manifest_version":3,
- "name":"Grocery Compare Browser Companion",
- "version":"0.4.0",
- "description":"Use your own browser session for Grocery Compare cart handoff.",
- "permissions":["storage","scripting","alarms"],
- "host_permissions":["http://127.0.0.1/*","https://www.newworld.co.nz/*","https://api-prod.newworld.co.nz/*","https://www.woolworths.co.nz/*"],
- "background":{"service_worker":"background.js"},
- "content_scripts":[{"matches":["http://127.0.0.1/*"],"js":["connect.js"]}],
- "action":{"default_title":"Grocery Compare","default_popup":"popup.html"}
+  "manifest_version": 3,
+  "name": "Grocery Compare Browser Companion",
+  "version": "0.6.1",
+  "minimum_chrome_version": "120",
+  "description": "Send your grocery basket to your own retailer tabs. Choose store access, pause anytime, and keep checkout in your browser.",
+  "permissions": [
+    "storage",
+    "scripting",
+    "alarms"
+  ],
+  "host_permissions": [
+    "http://127.0.0.1/*"
+  ],
+  "optional_host_permissions": [
+    "https://www.newworld.co.nz/*",
+    "https://www.woolworths.co.nz/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "http://127.0.0.1/connect"
+      ],
+      "include_globs": [
+        "http://127.0.0.1:47391/connect*"
+      ],
+      "js": [
+        "connect.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ],
+  "options_ui": {
+    "page": "setup.html",
+    "open_in_tab": true
+  },
+  "action": {
+    "default_title": "Grocery Compare",
+    "default_popup": "popup.html"
+  },
+  "incognito": "not_allowed"
 }

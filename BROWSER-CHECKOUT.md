@@ -1,34 +1,50 @@
-# Browser checkout
+# Browser companion 0.6.0
 
-Version 0.4.0 opens store checkout in the Windows default browser. The included companion supports Microsoft Edge and Google Chrome. Firefox and Safari do not yet have companion builds.
+The companion sends your Grocery Compare basket to retailer tabs in your own browser. This build supports Chrome and Edge; other Chromium browsers have not been verified. Firefox and Safari do not have companion builds.
 
-## One-time setup
+## Install or update
 
-1. Open the app's checkout dialog and choose **Set up browser companion**.
-2. Choose **Companion folder**. In Edge, visit `edge://extensions`; in Chrome, visit `chrome://extensions`. Enable Developer mode, choose **Load unpacked**, and select that folder.
-3. Choose **Connect browser** in the app. The connection page confirms pairing.
-4. Choose **Open browser** for a retailer and sign in there if needed. Return to the app and choose **Send items**. Complete payment on the retailer's website.
+1. Install the updated Grocery Compare desktop app. In checkout, select **Set up browser companion → Companion folder**.
+2. Open `chrome://extensions` or `edge://extensions`, enable **Developer mode**, choose **Load unpacked**, and select that folder. Keep it in place. If already installed from that same folder, click **Reload** instead. If replacing a different folder, remove the old entry first; keep only one copy enabled.
+3. Pin the Grocery Compare toolbar icon. Open it and **Enable** each retailer you use. The browser asks for permission separately for each retailer.
+4. In the desktop app, select **Connect browser**. Use the same browser profile where the companion is installed. If your default browser differs, copy the full connection-page address to the intended browser immediately. Codes expire after two minutes.
+5. Open each retailer using **Cart** in the companion or **Open browser** in the app. Sign in, return to the app, and select **Send items**. Review the store cart before payment.
 
-The companion folder is installed with the app under `resources/browser-extension`. Keep it there. A later companion update may require clicking Reload on the browser's Extensions page. This private development build is not listed in either extension store; browser installation requires that one-time user action. Store logins previously entered in the app's embedded browser are separate from the normal browser login.
+The normal installed companion folder is `resources/browser-extension` under the app installation. A standalone ZIP is also provided: extract it to a permanent folder before using Load unpacked. Do not load directly from the ZIP or a temporary download preview. Use the updated desktop app with this companion; older apps do not have its new status/pause endpoints.
 
-## What the connection does
+This build is not published in Chrome Web Store or Edge Add-ons. A Windows installer cannot silently install an unpacked extension into a normal browser. Store publication is still required for a standard one-click install and automatic extension updates.
 
-The app uses a local connection to the companion. The companion runs a fixed set of cart requests inside the retailer's own browser tab. Existing browser cookies are applied by the browser. New World authorization is obtained inside its tab and stays there. The app does not read the browser's cookie database, copy login cookies, or import browsing history.
+## Everyday use
 
-The connection is restricted to loopback address `127.0.0.1`, port 47391. Pairing uses a random, single-use code that expires after two minutes. Subsequent requests require the paired extension's origin and a random token. The local token is stored in `browser-link.json` in the app profile and in the companion's local storage; it is a connection credential, not a retailer login cookie. Disconnect in the app to revoke it.
+- **Ready to send** checks the desktop app connection. It does not imply that you are signed in at a retailer.
+- **Enable / Turn off** controls cart access to each retailer independently. Cart links work even without access.
+- **Pause / Resume** stops new work without forgetting the connection. An already submitted store request may complete; check the cart before retrying.
+- **Disconnect** removes the local pairing and revokes it in the running desktop app. If the app is closed or unreachable, disconnect from its setup dialog as well to remove its saved pairing.
+- **Check again** reconnects immediately after you reopen the app. Automatic retries back off when the app is unavailable.
+- **Setup & help** explains installation, upgrades, pairing, retailer login, and troubleshooting. A small recent-activity line shows the last store action, without storing basket contents or retailer responses.
 
-The companion permits only opening retailer tabs, reading carts, selecting a pickup location and setting product quantities. It has no cookie-reading permission, generic script-evaluation command, arbitrary URL fetch command or payment operation. It polls for work while the app is connected, with a browser alarm to reconnect after the app restarts.
+## Browser isolation
 
-Sending uses target quantities and reads the cart back before reporting success. It preserves unrelated items and refuses an occupied cart whose selected store cannot be safely confirmed. A timeout can leave an update unconfirmed; the app does not automatically retry a write. Review the retailer cart before trying again. Final orders and payment always remain with the retailer.
+Only loopback access is required at installation. New World and Woolworths website access is optional; the extension has no Google/email host permission, cookie API, browsing-data API, proxy API, request interception, history access, or password access. It does not change browser launch settings, sync, or security configuration. It is disabled in incognito.
 
-## Verification boundary
+The sole content script is restricted to the app's `/connect` page on `127.0.0.1:47391` and runs only in the top frame. Pairing uses a random, single-use, two-minute code. Authenticated loopback calls require the paired extension origin plus a token, omit cookies, reject redirects, and have time limits. Connection credentials live in `browser-link.json` in the app profile and in extension local storage; retailer login cookies stay in the browser.
 
-Tests cover pairing, origin and token checks, expiry, endpoint restrictions, timeouts, and verified cart transfers through a simulated browser connection. The hidden app test covers compact light/dark layouts and checkout/setup controls. Close the app before running `node scripts/verify-browser.cjs`, an opt-in real Edge companion check in a separate profile with read-only store requests only. It does not use the user's normal browser profile. The harness disables sync and uses HTTP/1.1 after an observed headless HTTP/2 error. The real test confirmed pairing and command/result delivery, but live retailer navigation encountered loading failures; it did not verify signed-in cart writes.
+Cart jobs allow only fixed retailer operations. Unknown and expired commands are rejected before tab access. Sending items requires an existing retailer tab and permission, does not open or focus another tab, and checks its origin before injection and again inside the fixed retailer function. Google sign-in redirects cannot receive the injected code. New World authentication happens in its retailer tab and its token stays there. No payment operation is supported.
 
-Signed-in cart transfer still needs validation with the account holder after companion setup. Retailer verification challenges, API changes, browser extension policy or login changes can affect it. A connected companion means the app can communicate with the browser; it does not mean either retailer is signed in.
+The worker polls locally while connected, yields periodically, and keeps a recovery alarm for worker suspension. Offline retries back off to five minutes. Unpaired/paused instances do no polling. Cart writes are never replayed automatically. Existing transfer logic sets target quantities, preserves unrelated items, and reads back the retailer cart before confirming success.
+
+## Reported Google / email issue
+
+The old code did not have Google/email access or cookie/proxy permissions either, so code inspection alone does not establish the cause of the reported logouts. Browser/profile and signed-in reproduction remain unconfirmed. This update improves isolation and connection behavior; it is not a verified fix for that specific incident. If it recurs, disable the companion and compare behavior without clearing cookies or resetting the browser.
+
+## Verification
+
+`node --test tests/*.test.cjs` covers pairing, revocation, origin/token checks, pause races, optional permissions, expired/unsupported commands, no-tab behavior, Google redirects, bounded offline retries, and simulated verified cart transfer.
+
+`node scripts/verify-companion.cjs` runs the actual extension in a disposable Edge profile, with the app closed so port 47391 is free. It checks pairing, actual popup rendering, permission denial, pause/resume, disconnect, and preservation of a synthetic Google-domain cookie. It saves screenshots and a report in `test-results/companion`. It never reads the normal browser profile or performs cart writes. A synthetic cookie check is not a signed-in Google/Gmail test. Signed-in retailer writes and other browsers still need account-holder validation.
 
 ## Primary references
 
-- [Chrome application-bound cookie encryption](https://security.googleblog.com/2024/07/improving-security-of-chrome-cookies-on.html) explains why direct access to another browser's cookie database is not the integration mechanism.
-- [Chrome scripting API](https://developer.chrome.com/docs/extensions/reference/api/scripting) documents running the fixed cart function in the retailer tab's main world.
-- [Extension network requests](https://developer.chrome.com/docs/extensions/develop/concepts/network-requests) documents the companion's host permissions and local connection.
+- [Chrome optional permissions](https://developer.chrome.com/docs/extensions/reference/api/permissions)
+- [Extension service-worker lifecycle](https://developer.chrome.com/docs/extensions/develop/concepts/service-workers/lifecycle)
+- [Extension distribution](https://developer.chrome.com/docs/extensions/how-to/distribute)

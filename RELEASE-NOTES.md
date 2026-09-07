@@ -1,3 +1,24 @@
+# 0.6.1 · Recommendations, deals and browser companion
+
+- Replace four-item aisle shelves with 24 mixed recommendations and more discoveries across varied aisles.
+- Add Best deals, ranked by verified percentage savings among loaded products.
+- Show sale icons, discount percentages and previous prices when supplied by the retailer; distinguish current non-member prices from historical prices.
+- Respect membership settings, avoid duplicate recommendations, and update picks as the basket changes.
+- Include the browser companion rework, custom title bar and catalogue performance improvements from the local 0.6.0 build.
+- Preserve the existing Windows installation identity and local shopping data during upgrades.
+
+Validation: 185 automated tests, TypeScript, production build, isolated Electron home-page interaction/layout checks, and live promotion responses at New World Broadway and Woolworths Kelvin Grove. Deals cover loaded products, not the entire store catalogue. Signed-in retailer transfers still require account-holder validation.
+
+# 0.6.0 · Browser companion rework
+
+- Optional retailer permissions, a narrower connection-page script, and no Google/email, cookie, proxy, or browser-setting access.
+- A redesigned light/dark popup with live app checks, store-access toggles, cart shortcuts, pause/resume, disconnect, and recent activity.
+- Guided first-run setup, upgrade instructions, and clearer desktop browser setup.
+- Bounded local requests, offline backoff, worker recovery, and no automatic cart-write replay or surprise tabs during transfers.
+- The reported Google/email logout could not be reproduced; signed-in retailer transfers still require account-holder validation.
+
+Validated through the automated suite and the actual extension in an isolated Edge profile. The local installer and companion ZIP are in `release-0.6.0`; this version has not been published to GitHub or browser extension stores.
+
 # 0.5.2 · Precise search and upgrade-ready installer
 
 - Search requires product words and requested pack counts or sizes together. "water 24 pk" excludes unrelated 24-packs.

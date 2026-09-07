@@ -16,7 +16,7 @@ class BrowserLink{
  status(){return {connected:!!this.credentials&&Date.now()-this.lastSeen<35000,paired:!!this.credentials,error:this.error};}
  connectURL(){this.pairing={code:secret(),expires:Date.now()+120000};return `http://127.0.0.1:${this.port}/connect#${this.pairing.code}`;}
  async disconnect(){this.credentials=null;this.lastSeen=0;this.pairing=null;await fs.unlink(this.file).catch(()=>{});this.abort();}
- abort(){this.waiting?.();this.waiting=null;for(const p of this.pending.values()){clearTimeout(p.timer);p.reject(new Error('Browser connection closed.'))}this.pending.clear();this.queue=[];}
+ abort(){this.epoch=(this.epoch||0)+1;this.waiting?.();this.waiting=null;for(const p of this.pending.values()){clearTimeout(p.timer);p.reject(new Error('Browser connection closed.'))}this.pending.clear();this.queue=[];}
  close(){this.abort();this.server?.closeAllConnections();return new Promise(resolve=>this.server?this.server.close(resolve):resolve());}
  request(command){
   if(!this.status().connected)return Promise.reject(new Error('Connect your browser first.'));
@@ -42,10 +42,14 @@ class BrowserLink{
    const credentials={origin,token:secret()};await fs.writeFile(this.file,JSON.stringify(credentials));this.abort();this.credentials=credentials;this.pairing=null;this.lastSeen=Date.now();return reply(200,{token:credentials.token});
   }
   if(!equal(req.headers.authorization,'Bearer '+this.credentials?.token))return reply(403,{error:'Not connected'});
+  if(path==='/status'&&req.method==='GET')return reply(200,{ok:true});
+  if(path==='/pause'&&req.method==='POST'){this.lastSeen=0;this.abort();return reply(200,{ok:true});}
+  if(path==='/disconnect'&&req.method==='POST'){await this.disconnect();return reply(200,{ok:true});}
   if(path==='/poll'&&req.method==='GET'){
+   const epoch=this.epoch;
    if(this.waiting)return reply(409,{error:'Already polling'});this.lastSeen=Date.now();
    if(!this.queue.length)await new Promise(resolve=>{const timer=setTimeout(done,20000);const self=this;function done(){clearTimeout(timer);if(self.waiting===done)self.waiting=null;res.off('close',done);resolve()}this.waiting=done;res.once('close',done)});
-   if(res.destroyed)return;if(origin!==this.credentials?.origin||!equal(req.headers.authorization,'Bearer '+this.credentials?.token))return reply(403,{error:'Disconnected'});this.lastSeen=Date.now();return reply(200,this.queue.shift()||null);
+   if(res.destroyed)return;if(origin!==this.credentials?.origin||!equal(req.headers.authorization,'Bearer '+this.credentials?.token))return reply(403,{error:'Disconnected'});if(epoch!==this.epoch)return reply(409,{error:'Connection paused'});this.lastSeen=Date.now();return reply(200,this.queue.shift()||null);
   }
   if(path==='/result'&&req.method==='POST'){
    const body=await this.read(req),pending=this.pending.get(body.id);if(!pending)return reply(410,{error:'Expired request'});

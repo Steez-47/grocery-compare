@@ -27,7 +27,7 @@ function affinity(p,profile,now){if(!profile.enabled)return 0;const words=tokeni
  +cats.reduce((s,c)=>s+value(profile.interests[clean(c)],now),0)/Math.max(3,cats.length);
 }
 function unitValue(p){const m=String(p.unitPrice||'').match(/\$([\d.]+)\s*\/\s*(\d+(?:\.\d+)?)\s*(kg|g|ml|l|ea)\b/i);if(!m)return null;const unit=m[3].toLowerCase(),amount=Number(m[2])*(unit==='kg'||unit==='l'?1000:1);return {unit:unit==='kg'?'g':unit==='l'?'ml':unit,value:Number(m[1])/amount};}
-function rankRows(rows,profile,{now=Date.now(),basket=[],loyalty={newworld:true,woolworths:true},source=null,limit=6}={}){
+function rankRows(rows,profile,{now=Date.now(),basket=[],loyalty={newworld:true,woolworths:true},source=null,limit=6,variety=false}={}){
  const inBasket=new Set(basket.flatMap(l=>Object.values(l.offers).map(key))),units=new Map();
  const candidates=rows.map(row=>{const offers=Object.values(row.offers).filter(p=>p.available&&!p.restricted&&effectivePrice(p,loyalty[p.retailer])!==null);if(!offers.length)return null;
   const p=offers.reduce((a,b)=>affinity(a,profile,now)>=affinity(b,profile,now)?a:b),u=unitValue({...p,unitPrice:effectiveUnitPrice(p,loyalty[p.retailer])});
@@ -45,7 +45,8 @@ function rankRows(rows,profile,{now=Date.now(),basket=[],loyalty={newworld:true,
  while(candidates.length&&selected.length<limit){
   let best=0,bestScore=-Infinity;
   candidates.forEach((c,i)=>{const similar=selected.length?Math.max(...selected.map(s=>textScore(s.p,c.p))):0;const brandCount=selected.filter(s=>clean(s.p.brand)===clean(c.p.brand)).length;
-   const score=c.score-similar*1.3-brandCount*0.7;
+   const categoryCount=variety&&c.p.categories?.length?selected.filter(s=>s.p.categories?.[0]===c.p.categories[0]).length:0;
+   const score=c.score-similar*1.3-brandCount*0.7-categoryCount*0.8;
    if(score>bestScore){best=i;bestScore=score}
   });selected.push(candidates.splice(best,1)[0]);
  }

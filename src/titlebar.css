@@ -1,0 +1,9 @@
+:root{--titlebar-height:40px}
+.titlebar{height:var(--titlebar-height);display:flex;align-items:center;justify-content:space-between;background:var(--surface);color:var(--muted);border-bottom:1px solid var(--border);user-select:none;-webkit-app-region:drag;position:relative;z-index:50}
+.titlebar-brand{display:flex;align-items:center;gap:9px;padding-left:17px;font-size:12px;font-weight:600;letter-spacing:.1px}.titlebar-brand svg{color:var(--accent)}
+.titlebar-actions{display:flex;height:100%;align-items:center;-webkit-app-region:no-drag}.titlebar-actions .icon-button{width:36px;height:30px;padding:0;border-radius:5px}.titlebar-divider{height:16px;width:1px;background:var(--border);margin:0 9px}
+.titlebar .window-button{width:46px;height:100%;border:0;border-radius:0;background:transparent;padding:0;color:var(--muted)}.titlebar .window-button:hover{background:var(--hover);color:var(--text)}.titlebar .window-close:hover{background:#c42b1c;color:#fff}.titlebar button:active{transform:none}.titlebar button:focus-visible{outline-offset:-3px}
+.workspace{height:calc(100dvh - 70px - var(--titlebar-height))}.modal-backdrop{top:var(--titlebar-height)}.store-shell{height:calc(100dvh - var(--titlebar-height))}.window-error{position:absolute;right:12px;top:44px;padding:12px;background:var(--warning-bg);color:var(--warning);-webkit-app-region:no-drag}
+/* Chromium skips layout and paint for distant cards while retaining their controls and state. */
+.product-list>.product-row{content-visibility:auto;contain-intrinsic-block-size:auto 290px}
+@media(max-width:620px){.shop{height:calc(100dvh - 210px - var(--titlebar-height))}}

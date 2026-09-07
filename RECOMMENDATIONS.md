@@ -12,15 +12,19 @@ The unlink button remembers a rejected pair. Find match ranks candidates by text
 
 ## Recommendations
 
-The home screen shows themed shelves, with four products, direct add buttons and See more. Shelf order balances familiar aisles with department variety. The initial selection is a deliberate spread of common aisles, not random or alphabetical.
+The home screen presents a mixed grid of 24 recommendations, with direct add buttons and a Best deals tab. Candidates come from both stores across eight varied aisles initially, rather than four fixed items per aisle. Discover more adds another 24 displayed picks and explores eight more aisles, up to 24 aisles and 240 displayed products. Products are deduplicated before ranking; a department diversity penalty supplements the existing brand and similarity penalties.
 
 Only activity inside this app is recorded locally: searches, opened aisles, similar-item views, adds, shelf dismissals and visible recommendation impressions. Adds count more than views. Preferences lose half their weight every 30 days; recent repeated exposure receives a short-lived penalty. Product ranking combines these preferences, similarity when viewing alternatives, specials, comparable unit-value signals and availability. A diversity pass reduces repeated brands and nearly identical suggestions. Items already represented in the basket are omitted from new home suggestions when every available offer is already there.
 
-Six shelf placeholders appear initially; each shelf fetches when it approaches the viewport, using actual category filters. Two shelf jobs run at once, with retailer catalogue caching. More ideas adds another four shelves. Returning to Browse or refreshing applies the latest preferences.
+Two category jobs run at once, using actual retailer category filters and the existing request cache. Results appear progressively. Returning home or refreshing applies the latest preferences. Membership and basket changes immediately rerank the loaded products. Individual products record impressions only when visible. Failed categories and partial store results show a retry notice.
 
 The profile lives in `%APPDATA%/grocery-compare/recommendations.json`. Maps are capped at 1,500 products, 300 brands, 500 interests, 150 aisles and 2,000 impression records. Confirmed and rejected pair lists each retain up to 500 entries. No retailer account purchase history is imported and no activity is sent to a recommendation server. Retailer requests still necessarily include the search/category and location needed to retrieve products.
 
 Stores contains Personalise browsing and Clear history. Turning personalisation off stops recording and ignores existing taste history. Clearing removes taste and impression history while preserving explicit match corrections. Shopping basket and login data are separate.
+
+## Sales and Best deals
+
+Best deals uses current retailer promotion metadata in the loaded category pages. It ranks the cheapest eligible offer displayed on each card by percentage saving, then cents saved per purchase unit; flagged specials without a valid reference follow verified discounts. This is explicitly a selection of loaded products, not a store-wide best-price guarantee. Member offers use the selected loyalty settings. A current non-member price is labelled Non-member, not Was. Historical references appear as Was only when higher than the eligible current price. References stay per item or per kg regardless of basket quantity. New World multi-buy and bonus-point promotions do not imply an unconditional single-item sale. Sale badges also appear on search results and within store comparisons.
 
 ## Verification and limits
 

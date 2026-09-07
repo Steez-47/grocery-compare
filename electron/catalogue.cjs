@@ -1,4 +1,5 @@
 const crypto = require('node:crypto');
+const {RequestCache}=require('./request-cache.cjs');
 const {nwPricing,wwMemberTag}=require('./pricing.cjs');
 const {WoolworthsMembers}=require('./woolworths-members.cjs');
 const WW = 'https://www.woolworths.co.nz';
@@ -18,7 +19,7 @@ function nwProduct(p,store){
  const minimum=Number(weight.minOrderQuantity)/scale,increment=Number(weight.stepSize)/scale;
  return {retailer:'newworld',id:p.productId,name,brand:p.brand||'',size:p.displayName||'',barcode:p.barcode||p.gtin||'',
   image:p.productImageUrls?.[0]||p.productImageUrl||`https://a.fsimg.co.nz/product/retail/fan/image/400x400/${p.productId.split('-')[0]}.png`,
-  categories:Object.values(p.categoryTrees?.[0]||{}).filter(Boolean),tags:(p.facets||[]).map(f=>f.itemDescription).filter(Boolean),special:Boolean(promo||p.decalCode),healthStar:null,
+  categories:Object.values(p.categoryTrees?.[0]||{}).filter(Boolean),tags:(p.facets||[]).map(f=>f.itemDescription).filter(Boolean),special:Boolean(promo||p.decalCode),saleEligible:Boolean(pricing.wasCents||pricing.member),healthStar:null,
   ...pricing,
   unit:weighted?'kg':'each',min:weighted&&minimum>0?minimum:weighted?0.1:1,step:weighted&&increment>0?increment:weighted?0.1:1,max:Math.min(99,pricing.memberLimit||99),
   available:p.availability?.includes('ONLINE')??true,restricted:Boolean(p.tobaccoFlag||p.liquorFlag),
@@ -51,7 +52,7 @@ const WSTORE=`mutation SetCartShoppingMode($input:SetCartShoppingModeInput!){set
 const WSET=`mutation SetCartLineItemQuantity($input:SetCartLineItemQuantitiesInput!){setCartLineItemQuantity(input:$input){key lineItems{sku productVariantSku quantity} validationResult{failedValidations{message}}}}`;
 
 class Catalogue {
- constructor(transports){this.transports=transports;this.nwAuth=null;this.storesCache=null;this.wwStore=null;this.wwQueue=Promise.resolve();this.cache=new Map();this.wwMembers=new WoolworthsMembers((path,init={})=>this.json('woolworths',WW+'/api/v1'+path,{...init,headers:{'X-Requested-With':'OnlineShopping.WebApp','X-UI-Ver':'7.76.44'}}));}
+ constructor(transports){this.transports=transports;this.nwAuth=null;this.storesCache=null;this.wwStore=null;this.wwQueue=Promise.resolve();this.requests=new RequestCache();this.metadata=new RequestCache({limit:8,ttl:600000});this.wwMembers=new WoolworthsMembers((path,init={})=>this.json('woolworths',WW+'/api/v1'+path,{...init,headers:{'X-Requested-With':'OnlineShopping.WebApp','X-UI-Ver':'7.76.44'}}));}
  async json(retailer,url,init={},checkout=false){
   const r=await this.transports[retailer](url,{...init,headers:{'user-agent':UA,accept:'application/json','content-type':'application/json',...init.headers},signal:AbortSignal.timeout(30000)},checkout);
   if(!r.ok)throw new Error(r.status===401?'Sign in to the store to continue.':r.status===403?'Open the store and complete its verification check.':`The store returned an error (${r.status}). Try again.`);
@@ -66,9 +67,9 @@ class Catalogue {
  }
  async token(){
   if(this.nwAuth && this.nwAuth.expires>Date.now()+60000)return this.nwAuth.token;
-  const d=await this.json('newworld',NW+'/api/user/get-current-user',{method:'POST',body:JSON.stringify({fingerprintUser:crypto.randomUUID().replaceAll('-',''),fingerprintGuest:UA})});
+  return this.metadata.get('nw-token',async()=>{const d=await this.json('newworld',NW+'/api/user/get-current-user',{method:'POST',body:JSON.stringify({fingerprintUser:crypto.randomUUID().replaceAll('-',''),fingerprintGuest:UA})});
   if(!d.access_token)throw new Error('New World could not start a session.');
-  this.nwAuth={token:d.access_token,expires:Date.parse(d.expires_time)||Date.now()+600000};return d.access_token;
+  this.nwAuth={token:d.access_token,expires:Date.parse(d.expires_time)||Date.now()+600000};return d.access_token;},true);
  }
  async nw(path,init={},token=null,checkout=false){
   return this.json('newworld',NWAPI+path,{...init,headers:{authorization:`Bearer ${token||await this.token()}`,origin:NW,referer:NW+'/',...init.headers}},checkout);
@@ -84,14 +85,16 @@ class Catalogue {
  }
  async departments(stores){
   const {departments}=require('./browse.cjs');
-  if(this.departmentCache?.id===stores.newworld.id)return this.departmentCache.data;
+  return this.metadata.get('departments|'+stores.newworld.id+'|'+stores.woolworths.id,async()=>{
   const [nw,ww]=await Promise.all([this.nw('/store/'+stores.newworld.id+'/categories'),this.gql('query GetAllCategories{My{categories{key name children{key name children{key name children{key name}}}}}}')]);
-  const data=departments(nw,ww);this.departmentCache={id:stores.newworld.id,data};return data;
+  return departments(nw,ww);});
  }
  async search(retailer,store,query,page=0,force=false,options={}){
   if(!store?.id)throw new Error('Choose a store first.');
-  const key=[retailer,store.id,query,page,JSON.stringify(options)].join('|');const old=this.cache.get(key);
-  if(!force&&old&&Date.now()-old.time<180000)return old.data;
+  const key=JSON.stringify([retailer,store.id,store.region,query,page,options]);
+  return this.requests.get(key,()=>this.fetchSearch(retailer,store,query,page,force,options),force);
+ }
+ async fetchSearch(retailer,store,query,page,force,options){
   let result;
   if(retailer==='newworld'){
    const region=store.region||'NI';
@@ -112,7 +115,7 @@ class Catalogue {
    };
    const job=this.wwQueue.then(work,work);this.wwQueue=job.catch(()=>{});result=await job;
   }
-  this.cache.set(key,{time:Date.now(),data:result});if(this.cache.size>100)this.cache.delete(this.cache.keys().next().value);return result;
+  return result;
  }
  async cart(retailer,token){
   if(retailer==='woolworths')return (await this.gql(WCART,{},true)).customerCart;

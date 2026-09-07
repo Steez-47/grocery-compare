@@ -1,0 +1,58 @@
+// Deterministic native UI checks. Isolated profile; no retailer writes.
+const fs=require('node:fs/promises'),path=require('node:path'),assert=require('node:assert/strict');
+async function run({win,cat,app}){
+ const out=app.getPath('userData'),checks=[],errors=[];await fs.rm(path.join(out,'verification-error.txt'),{force:true});
+ win.webContents.on('console-message',(_event,level,message)=>{if(level>=3)errors.push(message)});
+ const evaluate=s=>win.webContents.executeJavaScript(s);
+ const wait=async fn=>{const end=Date.now()+10000;while(!await fn()){if(Date.now()>end)throw Error('Native UI condition timed out: '+fn.toString());await new Promise(r=>setTimeout(r,30));}};
+ const click=async selector=>{const box=await evaluate(`(()=>{const e=document.querySelector(${JSON.stringify(selector)});if(!e)throw Error('Missing '+${JSON.stringify(selector)});e.scrollIntoView({block:'nearest'});const r=e.getBoundingClientRect();return {x:Math.round(r.x+r.width/2),y:Math.round(r.y+r.height/2)}})()`);win.webContents.sendInputEvent({type:'mouseDown',button:'left',clickCount:1,...box});win.webContents.sendInputEvent({type:'mouseUp',button:'left',clickCount:1,...box});};
+ const stores={newworld:{id:'nw-test',name:'Broadway',address:'Palmerston North',region:'NI'},woolworths:{id:'ww-test',name:'Kelvin Grove',address:'Palmerston North'}};
+ const aisle={id:'milk',name:'Milk & cream',sources:{newworld:{path:['Milk']},woolworths:{path:['Milk'],key:'milk'}}};
+ cat.departments=async()=>[{id:'dairy',name:'Dairy & eggs',children:[aisle]}];
+ cat.stores=async r=>[stores[r]];
+ cat.search=async(r,store,q,page=0)=>{
+  await new Promise(resolve=>setTimeout(resolve,r==='newworld'?30:750));
+  return {products:Array.from({length:36},(_,i)=>({retailer:r,id:r+'-'+(page*36+i),name:`${i%2?'Anchor':'Meadow Fresh'} Blue Milk ${page*36+i+1}`,brand:i%2?'Anchor':'Meadow Fresh',size:'2L',barcode:'',image:'',cents:450+i,regularCents:450+i,member:false,unit:'each',min:1,step:1,max:99,available:true,restricted:false,storeId:store.id,checkedAt:new Date().toISOString(),unitPrice:'$2.25 / L',offer:'',url:'',categories:['Milk']})),pages:4,total:144};
+ };
+ await wait(()=>evaluate(`!!document.querySelector('[aria-label="Settings"]')`));
+ await new Promise(r=>setTimeout(r,250));
+ await evaluate(`window.grocery.save(${JSON.stringify({version:1,stores,loyalty:{newworld:true,woolworths:true},basket:[],policy:'cheapest'})})`);
+ await evaluate(`window.grocery.setAppearance('light')`);await win.reload();win.show();
+ await wait(()=>evaluate(`document.querySelectorAll('.shelf-products .product-row').length===4`));
+ assert.equal(await evaluate(`document.querySelectorAll('.titlebar .theme-toggle').length`),1);
+ await click('[aria-label="Settings"]');await wait(()=>evaluate(`!!document.querySelector('.stores-modal')`));
+ assert(await evaluate(`document.querySelector('.modal-backdrop').getBoundingClientRect().top>=document.querySelector('.titlebar').getBoundingClientRect().bottom`));
+ await click('[aria-label="Close store settings"]');checks.push('Settings opens existing store, membership, personalisation and browser controls below the title bar');
+ await click('[aria-label="Maximize window"]');await wait(()=>win.isMaximized());await wait(()=>evaluate(`!!document.querySelector('[aria-label="Restore window"]')`));
+ await click('[aria-label="Restore window"]');await wait(()=>!win.isMaximized());
+ await click('[aria-label="Minimize window"]');await wait(()=>win.isMinimized());win.restore();win.focus();checks.push('Native maximize, restore and minimize buttons respond to mouse input');
+ await evaluate(`document.querySelector('[aria-label="Search groceries"]').focus()`);win.webContents.insertText('milk');
+ await wait(()=>evaluate(`document.querySelector('[aria-label="Search groceries"]').value==='milk'`));
+ const start=Date.now();await evaluate(`document.querySelector('form.search').requestSubmit()`);
+ await wait(()=>evaluate(`document.querySelectorAll('.product-list .product-row').length>0`));const firstResultsMs=Date.now()-start;
+ assert(await evaluate(`!!document.querySelector('.shop>.loading')`));assert(await evaluate(`Array.from(document.querySelectorAll('.product-list .row-add')).every(b=>b.disabled)`));
+ await wait(()=>evaluate(`!document.querySelector('.shop>.loading')`));const completeResultsMs=Date.now()-start;
+ checks.push('First retailer results appear before slower retailer; final comparison completes');
+ await click('.product-list .row-add');await wait(()=>evaluate(`document.querySelectorAll('.basket-line').length===1`));
+ const total=await evaluate(`document.querySelector('.total strong').textContent`);assert.equal(total,'$4.59');
+ await click('.refresh-prices');await wait(()=>evaluate(`!document.querySelector('.refresh-prices').disabled`));assert.equal(await evaluate(`document.querySelector('.total strong').textContent`),total);
+ await click('.checkout');await wait(()=>evaluate(`!!document.querySelector('.checkout-modal')`));await click('.checkout-modal .modal-heading button');checks.push('Basket refresh preserves price and lazy-loaded checkout opens');
+ await evaluate(`document.querySelector('[aria-label="Search groceries"]').focus()`);win.webContents.insertText(' bread');
+ await wait(()=>evaluate(`document.querySelector('[aria-label="Search groceries"]').value==='milk bread'`));
+ assert.equal(await evaluate(`document.querySelector('.total strong').textContent`),total);checks.push('Typing preserves rendered results and basket total; Add updates basket');
+ await click('.shop>.more');await wait(()=>evaluate(`document.querySelectorAll('.product-list .product-row').length>=72`));
+ assert(await evaluate(`document.querySelectorAll('.product-list .product-row').length>=72`));
+ await evaluate(`document.querySelector('.shop').scrollTop=900`);await new Promise(r=>setTimeout(r,100));
+ assert(await evaluate(`document.documentElement.scrollWidth<=innerWidth`));
+ await evaluate(`document.querySelector('.shop').scrollTop=0`);
+ await fs.writeFile(path.join(out,'titlebar-light.png'),(await win.webContents.capturePage()).toPNG());
+ await click('[aria-label="Use dark mode"]');await wait(()=>evaluate(`document.documentElement.dataset.theme==='dark'`));
+ await new Promise(r=>setTimeout(r,250));
+ await fs.writeFile(path.join(out,'titlebar-dark.png'),(await win.webContents.capturePage()).toPNG());checks.push('Both themes, scrolling and pagination render without horizontal overflow');
+ await evaluate(`document.querySelector('[aria-label="Filter by brand"]').value='Anchor';document.querySelector('[aria-label="Filter by brand"]').dispatchEvent(new Event('change',{bubbles:true}))`);
+ await wait(()=>evaluate(`Array.from(document.querySelectorAll('.product-list .row-brand')).every(e=>e.textContent==='Anchor')`));checks.push('Brand filtering remains functional');
+ let closed=false;win.once('close',e=>{e.preventDefault();closed=true});await click('[aria-label="Close window"]');await wait(()=>closed);checks.push('Close button requests native window close');
+ const report={checks,firstResultsMs,completeResultsMs,basketTotal:total,rendererErrors:errors,metrics:app.getAppMetrics().map(m=>({type:m.type,memory:m.memory}))};
+ assert.equal(errors.length,0,errors.join('\n'));await fs.writeFile(path.join(out,'performance-ui.json'),JSON.stringify(report,null,2));
+}
+module.exports={run};

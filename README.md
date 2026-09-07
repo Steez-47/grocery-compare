@@ -2,17 +2,21 @@
 
 A small Windows app for New World and Woolworths New Zealand. Choose a store for each, search both catalogues, and build one shopping basket.
 
+## What's new in 0.6.1
+
+Discover mixed recommendations across aisles, browse Best deals, and see sale badges with previous prices where available. This release also includes the browser companion rework with optional store access, pause/resume and guided setup. The installer and companion ZIP are on the release page. See [browser setup](BROWSER-CHECKOUT.md).
+
 ## Use
 
-Download `Grocery-Compare-Setup-0.5.2.exe` from the [latest release](https://github.com/Steez-47/grocery-compare/releases/latest). Downloads are public; no GitHub account is needed. Windows may ask you to confirm running the unsigned installer.
+Download `Grocery-Compare-Setup-0.6.1.exe` from the [latest release](https://github.com/Steez-47/grocery-compare/releases/latest). Downloads are public; no GitHub account is needed. Windows may ask you to confirm running the unsigned installer.
 
 **Updating:** close Grocery Compare and run the newer installer using the same Windows account. It updates the existing installation in place; you do not need to uninstall first. Your basket, stores and preferences stay on that computer. Updates are installed manually by downloading the newer installer.
 
 1. Choose your New World and Woolworths pickup locations.
-2. Use the department sidebar, search, or browse suggested shelves. Matching products appear in a compact grid with the cheapest eligible store already selected. Expand the price comparison to see both offers. Filter loaded products by brand, house brands, specials or availability.
+2. Use the department sidebar, search, or browse recommendations and Best deals. Matching products appear in a compact grid with the cheapest eligible store already selected. Expand the price comparison to see both offers. Filter loaded products by brand, house brands, specials or availability.
 3. Type a quantity or weight (kg or g), then **Add**. Repeated additions update the same list item. Quantities are editable in the basket too. **Automatic · cheapest store** picks the lowest eligible offer; New World only, Woolworths only and individual **Store options** remain available. **Use cheapest for every item** resets manual store choices. Collapse the sidebar and reopen it with **Basket** in the top bar.
 4. Pams/Value and Woolworths/Essentials products automatically pair when their type, size and distinguishing attributes agree. These are labelled **House-brand equivalent**, with both product names visible. Use **Find match** for other equivalents, or **Similar items** to browse alternatives in other sizes and brands.
-5. Use the moon/sun button for dark or light mode. Continue to checkout to open each store in your usual browser. Install the included Edge/Chrome companion once to send items through that browser session. See [browser setup](BROWSER-CHECKOUT.md). Complete payment with the retailer.
+5. The custom window bar contains Settings, the light/dark toggle, minimize, maximize/restore and close. Drag its empty area to move the window. Continue to checkout to open each store in your usual browser. Install the included Edge/Chrome companion once to send items through that browser session. See [browser setup](BROWSER-CHECKOUT.md). Complete payment with the retailer.
 
 Retailer logins stay in your main browser. The shopping list and recommendation history stay on your computer. Browsing learns from your searches, aisle visits, similar-item views, adds and hidden shelves. Turn off **Personalise browsing** or use **Clear history** in Stores. Explicit match corrections survive a history reset. There is no app account, analytics service, paid API or shared server.
 

@@ -16,6 +16,17 @@ function nwPricing(p){
   unitPrice,regularUnitPrice,offer:member.promo?.description||'',memberLimit:isMember&&member.promo.limit>0?member.promo.limit:undefined};
 }
 function effectiveUnitPrice(p,member){return p.member&&!member?p.regularUnitPrice||'':p.unitPrice||'';}
+// Only compare prices for the same purchase unit and membership eligibility.
+function saleInfo(p,member){
+ const price=p.member&&!member?p.regularCents:p.cents;
+ if(!p.available||p.restricted||!Number.isSafeInteger(price)||price<0)return null;
+ const memberDeal=!!(p.member&&member&&Number.isSafeInteger(p.regularCents)&&p.regularCents>price);
+ const was=Number.isSafeInteger(p.wasCents)&&p.wasCents>price?p.wasCents:null;
+ const reference=memberDeal?p.regularCents:was;
+ if(reference)return {label:memberDeal?'Member deal':'Sale',reference,referenceLabel:memberDeal?'Non-member':'Was',saving:reference-price,percent:Math.floor((reference-price)/reference*100)};
+ if((p.saleEligible??p.special)&&(!p.member||member))return {label:p.member?'Member deal':'Special',reference:null,referenceLabel:'',saving:0,percent:0};
+ return null;
+}
 function priceLabel(p,member){
  if(p.member)return member?(p.retailer==='woolworths'?'Member Price':'Club+ Deal'):'Non-member price';
  if(member&&p.memberPriceStatus==='unavailable')return 'Member Price unavailable';
@@ -48,4 +59,4 @@ function applyWwMember(p,item){
  return {...p,cents:member,regularCents:ordinary,member:true,special:true,memberPriceStatus:'checked',priceSource:'woolworths-rest',
   regularUnitPrice:p.regularUnitPrice||p.unitPrice,unitPrice:cup(dollars(item.size?.cupPrice),item.size?.cupMeasure)};
 }
-module.exports={nwPricing,wwMemberTag,applyWwMember,effectiveUnitPrice,priceLabel,repairPriceProduct};
+module.exports={nwPricing,wwMemberTag,applyWwMember,effectiveUnitPrice,priceLabel,repairPriceProduct,saleInfo};

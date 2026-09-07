@@ -1,0 +1,4 @@
+const fs=require('node:fs/promises');
+const {Catalogue}=require('../electron/catalogue.cjs');
+const {saleInfo}=require('../electron/pricing.cjs');
+(async()=>{const cat=new Catalogue({newworld:fetch,woolworths:fetch}),report={checkedAt:new Date().toISOString(),stores:[]};await Promise.allSettled(['newworld','woolworths'].map(async r=>{try{const stores=await cat.stores(r,r==='newworld'?'Broadway':'Kelvin Grove'),store=stores.find(s=>/palmerston/i.test(s.address))||stores[0];if(!store)throw Error('Store not found');const data=await cat.search(r,store,'butter',0,true);report.stores.push({retailer:r,store:store.name,count:data.products.length,specials:data.products.filter(p=>saleInfo(p,true)).map(p=>({name:p.name,cents:p.cents,deal:saleInfo(p,true)}))})}catch(e){report.stores.push({retailer:r,error:e.message})}}));await fs.writeFile('test-results/home/live-promotions.json',JSON.stringify(report,null,2));console.log(JSON.stringify(report));})()

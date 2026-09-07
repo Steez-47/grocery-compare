@@ -64,12 +64,13 @@ async function searchCatalogue(catalogue,retailer,store,query,page=0,force=false
  if(options.category||!query.trim())return catalogue.search(retailer,store,query,page,force,options);
  const parsed=parseQuery(query);
  if(!parsed.tokens.length)return {products:[],total:0,pages:0,nextPage:null};
- let next=page,pages=0,total=0;const candidates=[];
+ let next=page,pages=0,total=0;const candidates=[];let ranked=[];
  for(let scanned=0;scanned<3;scanned++){
   const data=await catalogue.search(retailer,store,parsed.retrievalQuery,next,force,options);
   candidates.push(...data.products);pages=data.pages;total=data.total;next++;
-  if(rankProducts(candidates,parsed).length>=12||next>=pages||next>28)break;
+  ranked=rankProducts(candidates,parsed);
+  if(ranked.length>=12||next>=pages||next>28)break;
  }
- return {products:rankProducts(candidates,parsed),total,pages,nextPage:next<pages&&next<=28?next:null};
+ return {products:ranked,total,pages,nextPage:next<pages&&next<=28?next:null};
 }
 module.exports={parseQuery,SearchIndex,rankProducts,rankRows,searchCatalogue};

@@ -40,3 +40,16 @@ test('extension permissions are restricted and browser-side code cannot request 
  context.location.origin='https://www.newworld.co.nz';context.crypto=globalThis.crypto;context.navigator={userAgent:'Test'};context.atob=globalThis.atob;context.fetch=async(url)=>{calls.push({url});return {status:200,text:async()=>JSON.stringify({access_token:'x.'+Buffer.from(JSON.stringify({roles:['ANONYMOUS']})).toString('base64url')+'.x'})}};
  const count=calls.length,guest=await context.retailerRequest({retailer:'newworld',operation:'setItems',body:{products:[]}});assert.match(guest.error,/Sign in to New World/);assert.equal(calls.length,count+1);assert.equal(calls.at(-1).url,'/api/user/get-current-user');
 });
+
+test('status is authenticated; pause cancels work and disconnect revokes pairing',async()=>{
+ const s=await setup();try{
+ const token=await pair(s);assert.equal((await s.request('/status',null,token)).status,200);assert.equal((await s.request('/status',null,'wrong')).status,403);
+ const pending=s.link.request({type:'open',retailer:'newworld'});const rejected=assert.rejects(pending,/connection closed/i);
+ assert.equal((await s.request('/pause',{},token)).status,200);await rejected;assert.equal(s.link.status().connected,false);assert.equal(s.link.status().paired,true);
+ assert.equal((await s.request('/status',null,token)).status,200);assert.equal(s.link.status().connected,false);
+ assert.equal((await s.request('/disconnect',{},token)).status,200);assert.equal(s.link.status().paired,false);assert.equal((await s.request('/status',null,token)).status,403);
+ }finally{await s.cleanup()}
+});
+test('pause cannot be undone by a previously waiting poll completing',async()=>{
+ const s=await setup();try{const token=await pair(s);const poll=s.request('/poll',null,token);while(!s.link.waiting)await new Promise(r=>setTimeout(r,5));await s.request('/pause',{},token);assert.equal((await poll).status,409);assert.equal(s.link.status().connected,false);}finally{await s.cleanup()}
+});

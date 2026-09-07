@@ -1,4 +1,4 @@
-import React,{useEffect,useRef,useState} from 'react';
+import React,{lazy,Suspense,useCallback,useMemo,useEffect,useRef,useState} from 'react';
 import {createRoot} from 'react-dom/client';
 import {ShoppingBasket,Search,MapPin,ChevronDown,Plus,Minus,X,ArrowLeft,ArrowRight,RefreshCw,Check,ShoppingBag,Download,SlidersHorizontal,Store as StoreIcon} from 'lucide-react';
 import model from '../electron/model.cjs';
@@ -7,9 +7,9 @@ import searchEngine from '../electron/search.cjs';
 import {BrowseNav,SimilarModal} from './Browse';
 import {HomeFeed} from './HomeFeed';
 import {ProductCard} from './ProductCard';
-import {ThemeControl} from './ThemeControl';
-import {BrowserSetup} from './BrowserSetup';
-import {Checkout} from './Checkout';
+import {TitleBar} from './TitleBar';
+const BrowserSetup=lazy(()=>import('./BrowserSetup').then(m=>({default:m.BrowserSetup})));
+const Checkout=lazy(()=>import('./Checkout').then(m=>({default:m.Checkout})));
 import {Cart} from './Cart';
 import type {State,Retailer,Policy,Store,Product,Row,Line,Department,Aisle} from './types';
 import './style.css';
@@ -18,6 +18,7 @@ import './feed.css';
 import './theme.css';
 import './cart.css';
 import './shopping.css';
+import './titlebar.css';
 const {groupProducts,effectivePrice,basketSummary}=model;
 const names={newworld:'New World',woolworths:'Woolworths'};
 const retailers:Retailer[]=['newworld','woolworths'];
@@ -54,13 +55,25 @@ function App(){
   if(!more){lastProducts.current=[];setRows([]);setPages({newworld:0,woolworths:0});}
   if(!more)window.grocery.track({type:'browse',aisle:browseAisle?.id,query:q}).catch(()=>{});
   const nextPages:Record<Retailer,number|null>={newworld:more?pages.newworld:0,woolworths:more?pages.woolworths:0};
-  const results=await Promise.allSettled(retailers.map(r=>nextPages[r]===null?Promise.resolve(null):window.grocery.search(r,state.stores[r]!,q,nextPages[r]!,false,browseAisle?{category:browseAisle.sources[r]}:{})));
+  let received=0;
+  const results=await Promise.allSettled(retailers.map(async r=>{
+   if(nextPages[r]===null)return null;
+   const result=await window.grocery.search(r,state.stores[r]!,q,nextPages[r]!,false,browseAisle?{category:browseAisle.sources[r]}:{});
+   received++;
+   // Show the first store immediately while the other retailer finishes.
+   if(!more&&id===requestId.current&&received===1&&result.products.length){
+    window.grocery.compare(result.products).then(compared=>{if(id===requestId.current&&received===1)setRows(browseAisle?compared:searchEngine.rankRows(compared,q))}).catch(()=>{});
+   }
+   return result;
+  }));
+  received=2;
   if(id!==requestId.current)return;
   const products:Product[]=more?[...lastProducts.current]:[];const errs:Partial<Record<Retailer,string>>={};let moreAvailable=false;
   results.forEach((result,i)=>{const r=retailers[i];if(result.status==='fulfilled'){if(!result.value)return;products.push(...result.value.products);nextPages[r]=result.value.nextPage!==undefined?result.value.nextPage:(result.value.pages>nextPages[r]!+1?nextPages[r]!+1:null);moreAvailable||=nextPages[r]!==null;}else{errs[r]=result.reason.message;moreAvailable=true;}});
   const unique=[...new Map(products.map(p=>[p.retailer+':'+p.id,p])).values()];lastProducts.current=unique;
   try{const compared=await window.grocery.compare(unique);if(id!==requestId.current)return;setRows(browseAisle?compared:searchEngine.rankRows(compared,q));setErrors(errs);setPages(nextPages);setHasMore(moreAvailable);}catch(e){if(id===requestId.current)setErrors({newworld:`Could not compare products. ${(e as Error).message}`})}finally{if(id===requestId.current)setBusy(false)}
  }
+ const chooseAisle=useCallback((a:Aisle)=>search('',false,a),[ready,state.stores]);
  function add(row:Row,r?:Retailer,recommendationAisle?:string,quantity=model.quantityRules(row).min){const p=model.selectOffer({...row,quantity,preferred:r||'cheapest'},'cheapest',state.loyalty) as Product|null;if(!p)return;window.grocery.track({type:'add',product:p,aisle:recommendationAisle||aisle?.id}).catch(()=>{});
   if(basketCollapsed)setNotice(`Added ${p.name} to your basket.`);
   setState(s=>model.addToBasket(s,row,quantity,r||'cheapest'));
@@ -69,42 +82,45 @@ function App(){
  async function refreshBasket(){
   if(!ready)return;setRefreshing(true);const snapshot=stateRef.current;let failures=0;
   const updated:Line[]=[];
-  for(const line of snapshot.basket){const offers:Row['offers']={};
-   for(const r of retailers){const previous=line.offers[r];if(!previous)continue;
+  let cursor=0;
+  await Promise.all(Array.from({length:Math.min(3,snapshot.basket.length)},async()=>{while(cursor<snapshot.basket.length){const line=snapshot.basket[cursor++];const offers:Row['offers']={};
+   await Promise.all(retailers.map(async r=>{const previous=line.offers[r];if(!previous)return;
     try{const data=await window.grocery.search(r,snapshot.stores[r]!,[previous.brand,previous.name.replace(previous.brand,'').replace(previous.size,'')].join(' ').trim().slice(0,100),0,true);let p=data.products.find(p=>p.id===previous.id);if(!p)p=data.products.find(p=>p.name.toLowerCase()===previous.name.toLowerCase()&&p.unit===previous.unit);if(p)offers[r]=p;else failures++;}catch{offers[r]={...previous,checkedAt:'1970-01-01T00:00:00Z'};failures++;}
-   }
+   }));
    updated.push({...line,offers,product:Object.values(offers)[0]||line.product});
-  }
-  setState(s=>retailers.some(r=>s.stores[r]?.id!==snapshot.stores[r]?.id)?s:({...s,basket:s.basket.map(l=>{const u=updated.find(x=>x.key===l.key);return u?{...u,quantity:l.quantity,preferred:l.preferred}:l})}));setRefreshing(false);if(failures)setNotice(`${failures} price(s) unavailable. Choose another item or try again.`);
+  }}));
+  const updates=new Map(updated.map(line=>[line.key,line]));
+  setState(s=>retailers.some(r=>s.stores[r]?.id!==snapshot.stores[r]?.id)?s:({...s,basket:s.basket.map(l=>{const u=updates.get(l.key);return u?{...u,quantity:l.quantity,preferred:l.preferred}:l})}));setRefreshing(false);if(failures)setNotice(`${failures} price(s) unavailable. Choose another item or try again.`);
  }
  async function openStore(r:Retailer){await window.grocery.save(stateRef.current);try{await window.grocery.openStore(r);}catch(e){setNotice((e as Error).message)}}
  async function send(r:Retailer){setSending(r);try{await window.grocery.save(stateRef.current);const result=await window.grocery.transfer(r);setNotice(`${result.count} items verified in ${names[r]}.${result.messages.length?' '+result.messages.join(' '):''}`);}catch(e){setNotice((e as Error).message)}finally{setSending(null)}}
- const summary=basketSummary(state.basket,state.policy,state.loyalty);
+ const summary=useMemo(()=>basketSummary(state.basket,state.policy,state.loyalty),[state.basket,state.policy,state.loyalty]);
 
- const brands=[...new Set(rows.flatMap(row=>Object.values(row.offers).map(p=>p!.brand)).filter(Boolean))].sort();
- const shown=rows.filter(row=>Object.values(row.offers).some(p=>p&&(!brandFilter||p.brand===brandFilter)&&(!onlyHouse||model.houseBrand(p))&&(!onlySpecial||p.special)&&(!onlyStock||p.available))).sort((a,b)=>{if(sort==='relevance')return 0;const price=(r:Row)=>Math.min(...Object.values(r.offers).map(p=>effectivePrice(p,state.loyalty[p!.retailer])??Infinity));return sort==='low'?price(a)-price(b):a.product.name.localeCompare(b.product.name)});
- function home(){requestId.current++;setSearched('');setQuery('');setRows([]);setAisle(null);setBusy(false);setHomeEpoch(v=>v+1);document.querySelector('.shop')?.scrollTo({top:0})}
+ const brands=useMemo(()=>[...new Set(rows.flatMap(row=>Object.values(row.offers).map(p=>p!.brand)).filter(Boolean))].sort(),[rows]);
+ const shown=useMemo(()=>rows.filter(row=>Object.values(row.offers).some(p=>p&&(!brandFilter||p.brand===brandFilter)&&(!onlyHouse||model.houseBrand(p))&&(!onlySpecial||p.special)&&(!onlyStock||p.available))).sort((a,b)=>{if(sort==='relevance')return 0;const price=(r:Row)=>Math.min(...Object.values(r.offers).map(p=>effectivePrice(p,state.loyalty[p!.retailer])??Infinity));return sort==='low'?price(a)-price(b):a.product.name.localeCompare(b.product.name)}),[rows,brandFilter,onlyHouse,onlySpecial,onlyStock,sort,state.loyalty]);
+ function home(){requestId.current++;setSearched('');setQuery('');setRows([]);lastProducts.current=[];setAisle(null);setBusy(false);setHomeEpoch(v=>v+1);document.querySelector('.shop')?.scrollTo({top:0})}
  async function separate(row:Row){const a=row.offers.newworld,b=row.offers.woolworths;if(!a||!b)return;await window.grocery.matchFeedback(a,b,false);setRows(rs=>rs.flatMap(r=>r.key===row.key?Object.values(r.offers).map(p=>({key:p!.retailer+':'+p!.id,product:p!,offers:{[p!.retailer]:p!}})): [r]));setState(s=>({...s,basket:s.basket.map(l=>{if(l.offers.newworld?.id!==a.id||l.offers.woolworths?.id!==b.id)return l;const chosen=model.selectOffer(l,s.policy,s.loyalty)||l.product;return {...l,product:chosen,offers:{[chosen.retailer]:chosen},equivalent:false}})}));setHomeEpoch(v=>v+1);setNotice('Comparison separated. This choice is remembered.');}
- const renderCard=(row:Row,recommendationAisle?:string)=><ProductCard row={row} state={state} onAdd={(row,r,q)=>add(row,r,recommendationAisle,q)} onSimilar={p=>{window.grocery.track({type:'view',product:p,aisle:recommendationAisle||aisle?.id}).catch(()=>{});setSimilar(p)}} onMatch={setMatch} onSeparate={row=>separate(row).catch(e=>setNotice(e.message))}/>;
+ const renderCard=useCallback((row:Row,recommendationAisle?:string)=><ProductCard row={row} state={state} pending={busy&&!!searched} onAdd={(row,r,q)=>add(row,r,recommendationAisle,q)} onSimilar={p=>{window.grocery.track({type:'view',product:p,aisle:recommendationAisle||aisle?.id}).catch(()=>{});setSimilar(p)}} onMatch={setMatch} onSeparate={row=>separate(row).catch(e=>setNotice(e.message))}/>,[state,basketCollapsed,aisle?.id,busy,searched]);
+ const resultCards=useMemo(()=>shown.map(row=><React.Fragment key={row.key}>{renderCard(row)}</React.Fragment>),[shown,renderCard]);
  const stale=state.basket.some(l=>Object.values(l.offers).some(p=>p?.storeId!==state.stores[p!.retailer]?.id||Date.now()-Date.parse(p!.checkedAt)>30*60*1000));
- if(browser.retailer)return <div className="store-shell"><header className="browser-bar"><button className="back" onClick={async()=>{await window.grocery.closeStore();setBrowser({retailer:null,url:'',loading:false})}}><ArrowLeft size={18}/> Back to basket</button><Badge r={browser.retailer}/><strong>{names[browser.retailer]}</strong><span className="browser-address">{(()=>{try{return new URL(browser.url).hostname}catch{return 'Loading…'}})()}</span><button className="icon-button" aria-label="Reload store" onClick={()=>window.grocery.navigate('reload')}><RefreshCw size={18} className={browser.loading?'spin':''}/></button><button onClick={()=>window.grocery.navigate('cart')}>Store cart</button></header>{notice&&<div className="toast browser-toast">{notice}</div>}</div>;
- return <div className="app"><header className="topbar"><div className="brand"><span className="brand-icon"><ShoppingBasket size={24}/></span><span>Grocery Compare</span></div><div className="stores">{retailers.map(r=><button key={r} className="store-picker" onClick={()=>setStoreModal(true)}><Badge r={r}/><span>{state.stores[r]?.name||'Choose store'}</span><ChevronDown size={14}/></button>)}<ThemeControl/><button ref={basketToggle} className="basket-toggle" aria-label={basketCollapsed?"Open basket":"Collapse basket"} aria-expanded={!basketCollapsed} aria-controls="shopping-basket" onClick={()=>toggleBasket(!basketCollapsed)}><ShoppingBasket size={17}/><span>Basket</span><span className="basket-count">{state.basket.length}</span>{!!state.basket.length&&<strong>{summary.missing>0?"Partial ":""}{dollars(summary.cents)}</strong>}</button></div></header>
- <div className={"workspace "+(basketCollapsed?"basket-closed":"")}><aside className="department-sidebar"><button className="all-groceries" onClick={home}><ShoppingBag size={18}/> All groceries</button><p className="nav-label">SHOP BY AISLE</p><BrowseNav departments={departments} active={aisle} onChoose={a=>search('',false,a)}/><button className="manage-stores" onClick={()=>setStoreModal(true)}><SlidersHorizontal size={15}/> Manage stores</button></aside><main className="shop"><div className="shop-heading"><h1>{searched||'Groceries'}</h1></div>
+ if(browser.retailer)return <><TitleBar onSettings={async()=>{await window.grocery.closeStore();setBrowser({retailer:null,url:'',loading:false});setStoreModal(true)}}/><div className="store-shell"><header className="browser-bar"><button className="back" onClick={async()=>{await window.grocery.closeStore();setBrowser({retailer:null,url:'',loading:false})}}><ArrowLeft size={18}/> Back to basket</button><Badge r={browser.retailer}/><strong>{names[browser.retailer]}</strong><span className="browser-address">{(()=>{try{return new URL(browser.url).hostname}catch{return 'Loading…'}})()}</span><button className="icon-button" aria-label="Reload store" onClick={()=>window.grocery.navigate('reload')}><RefreshCw size={18} className={browser.loading?'spin':''}/></button><button onClick={()=>window.grocery.navigate('cart')}>Store cart</button></header>{notice&&<div className="toast browser-toast">{notice}</div>}</div></>;
+ return <div className="app"><TitleBar onSettings={()=>setStoreModal(true)}/><header className="topbar"><div className="brand"><span className="brand-icon"><ShoppingBasket size={24}/></span><span>Grocery Compare</span></div><div className="stores">{retailers.map(r=><button key={r} className="store-picker" onClick={()=>setStoreModal(true)}><Badge r={r}/><span>{state.stores[r]?.name||'Choose store'}</span><ChevronDown size={14}/></button>)}<button ref={basketToggle} className="basket-toggle" aria-label={basketCollapsed?"Open basket":"Collapse basket"} aria-expanded={!basketCollapsed} aria-controls="shopping-basket" onClick={()=>toggleBasket(!basketCollapsed)}><ShoppingBasket size={17}/><span>Basket</span><span className="basket-count">{state.basket.length}</span>{!!state.basket.length&&<strong>{summary.missing>0?"Partial ":""}{dollars(summary.cents)}</strong>}</button></div></header>
+ <div className={"workspace "+(basketCollapsed?"basket-closed":"")}><aside className="department-sidebar"><button className="all-groceries" onClick={home}><ShoppingBag size={18}/> All groceries</button><p className="nav-label">SHOP BY AISLE</p><BrowseNav departments={departments} active={aisle} onChoose={chooseAisle}/><button className="manage-stores" onClick={()=>setStoreModal(true)}><SlidersHorizontal size={15}/> Manage stores</button></aside><main className="shop"><div className="shop-heading"><h1>{searched||'Groceries'}</h1></div>
  <form className="search" onSubmit={e=>{e.preventDefault();search()}}><Search size={23}/><input aria-label="Search groceries" placeholder="Search for milk, bread, apples…" value={query} onChange={e=>setQuery(e.target.value)} maxLength={100}/>{query&&<button type="button" className="icon-button" aria-label="Clear search" onClick={()=>setQuery('')}><X size={17}/></button>}<button className="primary" type="submit" disabled={busy}>Search</button></form>
  {searched&&<button className="back-to-browse" onClick={home}><ArrowLeft size={16}/> Browse</button>}
  {searched&&<div className="browse-filters"><span className="loaded-count">{searched} · {shown.length} loaded</span><select aria-label="Filter by brand" value={brandFilter} onChange={e=>setBrandFilter(e.target.value)}><option value="">All brands</option>{brands.map(b=><option key={b}>{b}</option>)}</select><button aria-pressed={onlyHouse} onClick={()=>setOnlyHouse(v=>!v)}>House brands</button><button aria-pressed={onlySpecial} onClick={()=>setOnlySpecial(v=>!v)}>Specials</button><button aria-pressed={onlyStock} onClick={()=>setOnlyStock(v=>!v)}>In stock</button></div>}
  {searched&&<div className="result-toolbar"><span className="result-label">{shown.length} products</span><select aria-label="Sort products" value={sort} onChange={e=>setSort(e.target.value)}><option value="relevance">Relevance</option><option value="low">Lowest price</option><option value="name">A to Z</option></select></div>}
- {ready&&<HomeFeed state={state} hidden={!!searched} epoch={homeEpoch} onChoose={a=>search('',false,a)} renderCard={renderCard}/>}
+ {ready&&<HomeFeed state={state} hidden={!!searched} epoch={homeEpoch} onChoose={chooseAisle} renderCard={renderCard}/>}
  {retailers.map(r=>errors[r]&&<div className="inline-error" key={r}><Badge r={r}/><span>{errors[r]}</span><button onClick={()=>openStore(r)}>Open store</button></div>)}
  {!searched?null:<>
- <div className="product-list" aria-label="Grocery search results">{shown.map(row=><React.Fragment key={row.key}>{renderCard(row)}</React.Fragment>)}</div>
+ <div className="product-list" aria-label="Grocery search results">{resultCards}</div>
  {busy&&<div className="loading"><RefreshCw size={21} className="spin"/> Finding your groceries…</div>}{!busy&&!shown.length&&!Object.keys(errors).length&&<div className="welcome"><Search size={42}/><h2>{hasMore?"No matches on these pages":"No products found"}</h2><p>{hasMore?"Check more results from your stores.":"Try another product name or remove a size or pack count."}</p></div>}{hasMore&&!busy&&<button className="more" onClick={()=>search(aisle?'':searched,true)}>Show more</button>}</>}
  </main><Cart state={state} hidden={basketCollapsed} refreshing={refreshing} stale={stale} onChange={setState} onQuantity={changeQty} onCompare={setMatch} onRefresh={refreshBasket} onCheckout={()=>setCheckout(true)} onCollapse={()=>toggleBasket(true)} onExport={()=>window.grocery.exportList().catch(e=>setNotice(e.message))}/></div>
  {storeModal&&<StoreModal state={state} onBrowser={()=>setBrowserSetup(true)} onClose={()=>{setStoreModal(false);setHomeEpoch(v=>v+1)}} onSave={async stores=>{try{await window.grocery.save({...state,stores});requestId.current++;setState(s=>({...s,stores}));setStoreModal(false);setRows([]);setSearched('');setAisle(null);lastProducts.current=[];setBusy(false);setHomeEpoch(v=>v+1);}catch(e){setNotice((e as Error).message)}}} onLoyalty={(r,value)=>setState(s=>({...s,loyalty:{...s.loyalty,[r]:value}}))}/>}
  {match&&<MatchModal row={match} state={state} onClose={()=>setMatch(null)} onChoose={async p=>{try{await window.grocery.matchFeedback(match.product,p,true);setHomeEpoch(v=>v+1);const update=(row:Row)=>({...row,offers:{...row.offers,[p.retailer]:p}});setRows(rs=>rs.map(r=>r.key===match.key?update(r):r));setState(s=>({...s,basket:s.basket.map(l=>l.key===match.key?{...l,...update(l)}:l)}));setMatch(null)}catch(e){setNotice((e as Error).message)}}}/>}
  {similar&&<SimilarModal source={similar} state={state} onClose={()=>setSimilar(null)} onAdd={(row,r,q)=>add(row,r,undefined,q)}/>}
- {checkout&&<Checkout state={state} sending={sending} onClose={()=>setCheckout(false)} onOpen={r=>openStore(r).catch(e=>setNotice(e.message))} onSend={send} onConnect={()=>setBrowserSetup(true)}/>}
- {browserSetup&&<BrowserSetup onClose={()=>setBrowserSetup(false)}/>}
+ <Suspense fallback={<div className="modal-backdrop"><div className="modal loading" role="status">Loading…</div></div>}>{checkout&&<Checkout state={state} sending={sending} onClose={()=>setCheckout(false)} onOpen={r=>openStore(r).catch(e=>setNotice(e.message))} onSend={send} onConnect={()=>setBrowserSetup(true)}/>}
+ {browserSetup&&<BrowserSetup onClose={()=>setBrowserSetup(false)}/>}</Suspense>
  {notice&&<div role="status" className="toast">{notice}<button aria-label="Dismiss message" onClick={()=>setNotice('')}><X size={16}/></button></div>}
  </div>
 }
